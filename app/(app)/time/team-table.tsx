@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { updateMemberStatus, updateMemberRole } from './actions'
+import { MemberTeamModal } from './member-team-modal'
 import { toast } from 'sonner'
 import type { Profile, TeamMember } from '@/types/database'
 
@@ -174,61 +175,66 @@ export function TeamTable({
                   </td>
                   {isAdmin && member.id !== currentUserId && (
                     <td className="py-3 px-4">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            disabled={processing === member.id}
-                            aria-label={`Ações para ${member.full_name}`}
-                            className="p-1.5 rounded text-[#64748B] hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+                      <div className="flex items-center justify-end gap-2">
+                        <MemberTeamModal member={member} />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              disabled={processing === member.id}
+                              aria-label={`Ações para ${member.full_name}`}
+                              className="p-1.5 rounded text-[#64748B] hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+                            >
+                              <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            className="bg-navy-800 border border-white/[0.08] text-white"
+                            align="end"
                           >
-                            <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          className="bg-navy-800 border border-white/[0.08] text-white"
-                          align="end"
-                        >
-                          {member.status === 'active' ? (
-                            <DropdownMenuItem
-                              onClick={() => handleStatusChange(member.id, 'inactive')}
-                              className="text-red-400 focus:text-red-300 cursor-pointer"
-                            >
-                              <UserX className="w-4 h-4 mr-2" aria-hidden="true" />
-                              Desativar
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => handleStatusChange(member.id, 'active')}
-                              className="text-emerald-400 focus:text-emerald-300 cursor-pointer"
-                            >
-                              <UserCheck className="w-4 h-4 mr-2" aria-hidden="true" />
-                              Ativar
-                            </DropdownMenuItem>
-                          )}
-                          {member.role !== 'admin' && (
-                            <DropdownMenuItem
-                              onClick={() => handleRoleChange(member.id, 'admin')}
-                              className="text-brand focus:text-brand-light cursor-pointer"
-                            >
-                              <ShieldCheck className="w-4 h-4 mr-2" aria-hidden="true" />
-                              Promover a Admin
-                            </DropdownMenuItem>
-                          )}
-                          {member.role === 'admin' && (
-                            <DropdownMenuItem
-                              onClick={() => handleRoleChange(member.id, 'integrante')}
-                              className="cursor-pointer"
-                            >
-                              <ShieldCheck className="w-4 h-4 mr-2" aria-hidden="true" />
-                              Remover Admin
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                            {member.status === 'active' ? (
+                              <DropdownMenuItem
+                                onClick={() => handleStatusChange(member.id, 'inactive')}
+                                className="text-red-400 focus:text-red-300 cursor-pointer"
+                              >
+                                <UserX className="w-4 h-4 mr-2" aria-hidden="true" />
+                                Desativar
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => handleStatusChange(member.id, 'active')}
+                                className="text-emerald-400 focus:text-emerald-300 cursor-pointer"
+                              >
+                                <UserCheck className="w-4 h-4 mr-2" aria-hidden="true" />
+                                Ativar
+                              </DropdownMenuItem>
+                            )}
+                            {member.role !== 'admin' && (
+                              <DropdownMenuItem
+                                onClick={() => handleRoleChange(member.id, 'admin')}
+                                className="text-brand focus:text-brand-light cursor-pointer"
+                              >
+                                <ShieldCheck className="w-4 h-4 mr-2" aria-hidden="true" />
+                                Promover a Admin
+                              </DropdownMenuItem>
+                            )}
+                            {member.role === 'admin' && (
+                              <DropdownMenuItem
+                                onClick={() => handleRoleChange(member.id, 'integrante')}
+                                className="cursor-pointer"
+                              >
+                                <ShieldCheck className="w-4 h-4 mr-2" aria-hidden="true" />
+                                Remover Admin
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </td>
                   )}
                   {isAdmin && member.id === currentUserId && (
-                    <td className="py-3 px-4" />
+                    <td className="py-3 px-4 text-right">
+                      <MemberTeamModal member={member} />
+                    </td>
                   )}
                 </tr>
               )
@@ -279,6 +285,11 @@ export function TeamTable({
               )}
               {instruments.length > 0 && (
                 <p className="text-xs text-[#64748B] mt-2">{instruments.join(', ')}</p>
+              )}
+              {isAdmin && (
+                <div className="mt-3 pt-3 border-t border-white/[0.04]">
+                  <MemberTeamModal member={member} />
+                </div>
               )}
             </div>
           )

@@ -91,7 +91,9 @@ export function Sidebar() {
             <p className="text-sm font-medium text-white truncate">
               {profile.full_name ?? 'Usuário'}
             </p>
-            <p className="text-xs text-[#64748B] capitalize">{profile.role}</p>
+            <p className={`text-xs ${profile.role === 'admin' ? 'text-brand' : 'text-[#64748B]'}`}>
+              {profile.role === 'admin' ? 'Administrador' : 'Integrante'}
+            </p>
           </div>
         </div>
         <button

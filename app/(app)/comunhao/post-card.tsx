@@ -1,10 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronDown, BookOpen, FileText, Mic, Video } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { BibleVerseBlock } from './bible-verse-block'
 import type { CommunionPostWithAuthor } from '@/types/database'
+import { EditPostModal } from './edit-post-modal'
+import { deletePost } from './actions'
+import { toast } from 'sonner'
 
 const POST_TYPE_CONFIG = {
   estudo: {
@@ -34,14 +38,33 @@ function formatDate(dateStr: string) {
 
 interface PostCardProps {
   post: CommunionPostWithAuthor
+  isAdmin: boolean
 }
 
-export function PostCard({ post }: PostCardProps) {
+export function PostCard({ post, isAdmin }: PostCardProps) {
+  const router = useRouter()
   const [expanded, setExpanded] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const config = POST_TYPE_CONFIG[post.type] ?? POST_TYPE_CONFIG.estudo
   const Icon = config.icon
   const preview = post.content?.slice(0, 200) ?? ''
   const hasMore = (post.content?.length ?? 0) > 200
+
+  async function handleDelete() {
+    const confirmed = window.confirm(`Excluir a postagem "${post.title}"?`)
+    if (!confirmed) return
+
+    setDeleting(true)
+    try {
+      await deletePost(post.id)
+      toast.success('Postagem excluída.')
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao excluir postagem.')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <article className="bg-navy-900 border border-white/[0.06] rounded-modal p-5">
@@ -64,10 +87,25 @@ export function PostCard({ post }: PostCardProps) {
             <p className="text-xs text-[#64748B]">{formatDate(post.created_at)}</p>
           </div>
         </div>
-        <span className={`flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full border flex-shrink-0 ${config.color}`}>
-          <Icon className="w-3 h-3" aria-hidden="true" />
-          {config.label}
-        </span>
+        <div className="flex flex-col items-end gap-2">
+          <span className={`flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded-full border flex-shrink-0 ${config.color}`}>
+            <Icon className="w-3 h-3" aria-hidden="true" />
+            {config.label}
+          </span>
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <EditPostModal post={post} />
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-card border border-red-500/20 text-xs text-red-300 hover:text-red-200 hover:border-red-400/40 transition-colors disabled:opacity-50"
+              >
+                Excluir
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Title */}

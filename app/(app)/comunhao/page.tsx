@@ -33,7 +33,7 @@ export default async function ComunhaoPage() {
       />
       <div className="p-6 max-w-3xl">
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <PostFeed posts={(posts ?? []) as any[]} userId={user!.id} />
+        <PostFeed posts={(posts ?? []) as any[]} userId={user!.id} isAdmin={isAdmin} />
       </div>
       <LaiaFloatingBadge tip="Sugestões de versículos temáticos" />
     </>

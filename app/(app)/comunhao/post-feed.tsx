@@ -5,9 +5,10 @@ import type { CommunionPostWithAuthor } from '@/types/database'
 interface PostFeedProps {
   posts: CommunionPostWithAuthor[]
   userId: string
+  isAdmin: boolean
 }
 
-export function PostFeed({ posts }: PostFeedProps) {
+export function PostFeed({ posts, isAdmin }: PostFeedProps) {
   if (posts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -23,7 +24,7 @@ export function PostFeed({ posts }: PostFeedProps) {
   return (
     <div className="space-y-4">
       {posts.map((post) => (
-        <PostCard key={post.id} post={post} />
+        <PostCard key={post.id} post={post} isAdmin={isAdmin} />
       ))}
     </div>
   )

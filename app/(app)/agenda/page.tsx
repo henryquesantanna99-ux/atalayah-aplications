@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/layout/page-header'
 import { LaiaFloatingBadge } from '@/components/laia/laia-floating-badge'
 import { MonthlyCalendar } from './monthly-calendar'
+import { EventFormModal } from './event-form-modal'
 
 interface AgendaPageProps {
   searchParams: { year?: string; month?: string }
@@ -39,6 +40,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
       <PageHeader
         title="Agenda"
         subtitle="Visualize e gerencie os eventos do ministério"
+        actions={isAdmin ? <EventFormModal /> : undefined}
       />
       <div className="p-6">
         <MonthlyCalendar
