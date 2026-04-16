@@ -10,12 +10,14 @@ import {
   Sparkles,
   Users,
   BookOpen,
+  Headphones,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Geral' },
   { href: '/musicas', icon: Music, label: 'Músicas' },
   { href: '/agenda', icon: CalendarDays, label: 'Agenda' },
+  { href: '/estudo', icon: Headphones, label: 'Estudo' },
   { href: '/chat', icon: MessageSquare, label: 'Chat' },
   { href: '/laia', icon: Sparkles, label: 'Laia' },
   { href: '/time', icon: Users, label: 'Time' },

@@ -163,6 +163,7 @@ export interface Database {
           artist: string | null
           version: string | null
           reference_link: string | null
+          song_id: string | null
           soloist_id: string | null
           key_note: string | null
           vocal_guides: string[]
@@ -180,6 +181,7 @@ export interface Database {
           artist?: string | null
           version?: string | null
           reference_link?: string | null
+          song_id?: string | null
           soloist_id?: string | null
           key_note?: string | null
           vocal_guides?: string[]
@@ -195,12 +197,176 @@ export interface Database {
           artist?: string | null
           version?: string | null
           reference_link?: string | null
+          song_id?: string | null
           soloist_id?: string | null
           key_note?: string | null
           vocal_guides?: string[]
           instrumental_guides?: string[]
           playlist_link?: string | null
           moment?: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      songs: {
+        Row: {
+          id: string
+          title: string
+          artist: string | null
+          youtube_video_id: string | null
+          youtube_url: string | null
+          youtube_thumbnail: string | null
+          youtube_duration: string | null
+          cifra_club_url: string | null
+          default_key: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          artist?: string | null
+          youtube_video_id?: string | null
+          youtube_url?: string | null
+          youtube_thumbnail?: string | null
+          youtube_duration?: string | null
+          cifra_club_url?: string | null
+          default_key?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          title?: string
+          artist?: string | null
+          youtube_video_id?: string | null
+          youtube_url?: string | null
+          youtube_thumbnail?: string | null
+          youtube_duration?: string | null
+          cifra_club_url?: string | null
+          default_key?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      song_stem_jobs: {
+        Row: {
+          id: string
+          song_id: string | null
+          setlist_song_id: string | null
+          requested_by: string | null
+          status: 'pending' | 'processing' | 'completed' | 'failed'
+          stems_requested: string[]
+          preprocessing_options: string[]
+          musicgpt_task_id: string | null
+          musicgpt_conversion_id: string | null
+          credit_estimate: number | null
+          eta: number | null
+          error_message: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          song_id?: string | null
+          setlist_song_id?: string | null
+          requested_by?: string | null
+          status?: 'pending' | 'processing' | 'completed' | 'failed'
+          stems_requested?: string[]
+          preprocessing_options?: string[]
+          musicgpt_task_id?: string | null
+          musicgpt_conversion_id?: string | null
+          credit_estimate?: number | null
+          eta?: number | null
+          error_message?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          song_id?: string | null
+          setlist_song_id?: string | null
+          status?: 'pending' | 'processing' | 'completed' | 'failed'
+          stems_requested?: string[]
+          preprocessing_options?: string[]
+          musicgpt_task_id?: string | null
+          musicgpt_conversion_id?: string | null
+          credit_estimate?: number | null
+          eta?: number | null
+          error_message?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      song_stems: {
+        Row: {
+          id: string
+          song_id: string | null
+          setlist_song_id: string | null
+          job_id: string | null
+          stem_type: string
+          audio_url: string
+          wav_url: string | null
+          storage_path: string | null
+          duration: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          song_id?: string | null
+          setlist_song_id?: string | null
+          job_id?: string | null
+          stem_type: string
+          audio_url: string
+          wav_url?: string | null
+          storage_path?: string | null
+          duration?: number | null
+          created_at?: string
+        }
+        Update: {
+          stem_type?: string
+          audio_url?: string
+          wav_url?: string | null
+          storage_path?: string | null
+          duration?: number | null
+        }
+        Relationships: []
+      }
+      song_chords: {
+        Row: {
+          id: string
+          song_id: string
+          provider: string
+          title: string
+          artist: string | null
+          source_url: string | null
+          key_note: string | null
+          content_json: Json | null
+          plain_text: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          song_id: string
+          provider?: string
+          title: string
+          artist?: string | null
+          source_url?: string | null
+          key_note?: string | null
+          content_json?: Json | null
+          plain_text?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          provider?: string
+          title?: string
+          artist?: string | null
+          source_url?: string | null
+          key_note?: string | null
+          content_json?: Json | null
+          plain_text?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -380,6 +546,13 @@ export type EventMemberInsert = Database['public']['Tables']['event_members']['I
 export type SetlistSong = Database['public']['Tables']['setlist_songs']['Row']
 export type SetlistSongInsert = Database['public']['Tables']['setlist_songs']['Insert']
 export type SetlistSongUpdate = Database['public']['Tables']['setlist_songs']['Update']
+
+export type Song = Database['public']['Tables']['songs']['Row']
+export type SongInsert = Database['public']['Tables']['songs']['Insert']
+export type SongUpdate = Database['public']['Tables']['songs']['Update']
+export type SongStemJob = Database['public']['Tables']['song_stem_jobs']['Row']
+export type SongStem = Database['public']['Tables']['song_stems']['Row']
+export type SongChord = Database['public']['Tables']['song_chords']['Row']
 
 export type CommunionPost = Database['public']['Tables']['communion_posts']['Row']
 export type CommunionPostInsert = Database['public']['Tables']['communion_posts']['Insert']

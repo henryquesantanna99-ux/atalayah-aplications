@@ -111,6 +111,7 @@ export async function createScale(input: {
     functionName: string
   }[]
   songs: {
+    songId?: string | null
     songTitle: string
     soloistId: string | null
     keyNote: string | null
@@ -157,6 +158,7 @@ export async function createScale(input: {
       .insert(
         validSongs.map((song, index) => ({
           event_id: eventId,
+          song_id: song.songId ?? null,
           order_index: index,
           song_title: song.songTitle.trim(),
           soloist_id: song.soloistId,
