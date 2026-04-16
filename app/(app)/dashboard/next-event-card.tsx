@@ -7,12 +7,14 @@ const EVENT_TYPE_LABELS = {
   culto: 'Culto',
   ensaio: 'Ensaio',
   comunhao: 'Comunhão',
+  evento_externo: 'Evento Externo',
 }
 
 const EVENT_TYPE_COLORS = {
   culto: 'bg-brand/20 text-brand border-brand/30',
   ensaio: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
   comunhao: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  evento_externo: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
 }
 
 function formatDate(dateStr: string) {
@@ -44,7 +46,7 @@ export function NextEventCard({ event }: NextEventCardProps) {
   if (!event) {
     return (
       <div className="bg-navy-900 border border-white/[0.06] rounded-modal p-6">
-        <h2 className="text-sm font-medium text-[#94A3B8] mb-2">Próximo Culto</h2>
+        <h2 className="text-sm font-medium text-[#94A3B8] mb-2">Próximo Evento</h2>
         <p className="text-[#64748B] text-sm">Nenhum evento agendado.</p>
       </div>
     )
@@ -60,7 +62,7 @@ export function NextEventCard({ event }: NextEventCardProps) {
 
       <div className="relative">
         <div className="flex items-start justify-between mb-4">
-          <h2 className="text-sm font-medium text-[#94A3B8]">Próximo Culto</h2>
+          <h2 className="text-sm font-medium text-[#94A3B8]">Próximo Evento</h2>
           <span
             className={`text-xs font-medium px-2 py-1 rounded-full border ${typeColors}`}
           >

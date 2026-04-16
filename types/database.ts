@@ -78,7 +78,7 @@ export interface Database {
         Row: {
           id: string
           title: string
-          type: 'culto' | 'ensaio' | 'comunhao'
+          type: 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
           date: string
           arrival_time: string | null
           start_time: string | null
@@ -90,7 +90,7 @@ export interface Database {
         Insert: {
           id?: string
           title: string
-          type?: 'culto' | 'ensaio' | 'comunhao'
+          type?: 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
           date: string
           arrival_time?: string | null
           start_time?: string | null
@@ -101,7 +101,7 @@ export interface Database {
         }
         Update: {
           title?: string
-          type?: 'culto' | 'ensaio' | 'comunhao'
+          type?: 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
           date?: string
           arrival_time?: string | null
           start_time?: string | null

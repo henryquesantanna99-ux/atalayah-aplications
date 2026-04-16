@@ -51,7 +51,7 @@ async function DashboardContent() {
     nextEvent
       ? supabase
           .from('setlist_songs')
-          .select('*')
+          .select('*, profiles(id, full_name)')
           .eq('event_id', nextEvent.id)
           .order('order_index')
           .limit(6)
@@ -84,10 +84,10 @@ async function DashboardContent() {
       <NextEventCard event={nextEvent} userId={user?.id} />
 
       {/* Scaled members */}
-      <MembersPreview members={eventMembers} eventId={nextEvent?.id} />
+      <MembersPreview members={eventMembers} eventId={nextEvent?.id} songs={setlistSongs} />
 
       {/* Setlist preview */}
-      <SetlistPreview songs={setlistSongs} />
+      <SetlistPreview songs={setlistSongs} eventType={nextEvent?.type} />
     </div>
   )
 }

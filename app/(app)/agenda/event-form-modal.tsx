@@ -13,7 +13,7 @@ import {
 import { toast } from 'sonner'
 import { createEvent, updateEvent } from './actions'
 
-type EventType = 'culto' | 'ensaio' | 'comunhao'
+type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
 interface CalendarEvent {
   id: string
@@ -153,6 +153,7 @@ export function EventFormModal({
                 <option value="culto">Culto</option>
                 <option value="ensaio">Ensaio</option>
                 <option value="comunhao">Comunhão</option>
+                <option value="evento_externo">Evento Externo</option>
               </select>
             </div>
             <div>

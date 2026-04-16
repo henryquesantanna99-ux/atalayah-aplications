@@ -20,12 +20,19 @@ interface MemberWithProfile {
   } | null
 }
 
+interface SongWithSoloist {
+  id: string
+  song_title: string
+  soloist_id: string | null
+}
+
 interface MembersPreviewProps {
   members: MemberWithProfile[]
   eventId?: string
+  songs: SongWithSoloist[]
 }
 
-export function MembersPreview({ members, eventId }: MembersPreviewProps) {
+export function MembersPreview({ members, eventId, songs }: MembersPreviewProps) {
   const profile = useProfile()
   const supabase = createClient()
   const [localMembers, setLocalMembers] = useState(members)
@@ -89,8 +96,16 @@ export function MembersPreview({ members, eventId }: MembersPreviewProps) {
                   <p className="text-sm text-white truncate">
                     {member.profiles?.full_name ?? 'Membro'}
                   </p>
-                  {member.instrument && (
-                    <p className="text-xs text-[#64748B]">{member.instrument}</p>
+                  <p className="text-xs text-[#64748B]">
+                    {member.instrument ?? 'Função não definida'}
+                  </p>
+                  {member.instrument?.toLowerCase().includes('vocal') && (
+                    <p className="text-xs text-brand truncate">
+                      {songs
+                        .filter((song) => song.soloist_id === member.profile_id)
+                        .map((song) => song.song_title)
+                        .join(', ') || 'Sem músicas atribuídas'}
+                    </p>
                   )}
                 </div>
                 <div aria-label={member.confirmed ? 'Confirmado' : 'Pendente'}>

@@ -9,6 +9,7 @@ const EVENT_TYPE_COLORS = {
   culto: 'bg-brand/80 text-white',
   ensaio: 'bg-indigo-500/80 text-white',
   comunhao: 'bg-emerald-600/80 text-white',
+  evento_externo: 'bg-amber-500/80 text-white',
 }
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -115,6 +116,7 @@ export function MonthlyCalendar({
           { type: 'culto', label: 'Culto' },
           { type: 'ensaio', label: 'Ensaio' },
           { type: 'comunhao', label: 'Comunhão' },
+          { type: 'evento_externo', label: 'Evento Externo' },
         ].map(({ type, label }) => (
           <div key={type} className="flex items-center gap-1.5">
             <div className={`w-2.5 h-2.5 rounded-full ${EVENT_TYPE_COLORS[type as keyof typeof EVENT_TYPE_COLORS]}`} />

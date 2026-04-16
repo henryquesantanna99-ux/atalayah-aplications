@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
-type EventType = 'culto' | 'ensaio' | 'comunhao'
+type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -98,4 +98,81 @@ export async function removeEventMember(eventMemberId: string) {
 
   if (error) throw new Error(error.message)
   revalidatePath('/agenda')
+}
+
+export async function createScale(input: {
+  eventId: string | null
+  event: {
+    title: string
+    type: EventType
+    date: string
+    arrival_time: string | null
+    start_time: string | null
+    notes: string | null
+  }
+  members: {
+    profileId: string
+    functionName: string
+  }[]
+  songs: {
+    songTitle: string
+    soloistId: string | null
+    keyNote: string | null
+    referenceLink: string | null
+  }[]
+}) {
+  const { supabase, user } = await requireAdmin()
+
+  let eventId = input.eventId
+
+  if (!eventId) {
+    const { data: createdEvent, error: eventError } = await supabase
+      .from('events')
+      .insert({
+        ...input.event,
+        created_by: user.id,
+      })
+      .select('id')
+      .single()
+
+    if (eventError) throw new Error(eventError.message)
+    eventId = createdEvent.id
+  }
+
+  if (input.members.length > 0) {
+    const { error: membersError } = await supabase
+      .from('event_members')
+      .upsert(
+        input.members.map((member) => ({
+          event_id: eventId,
+          profile_id: member.profileId,
+          instrument: member.functionName,
+        })),
+        { onConflict: 'event_id,profile_id' }
+      )
+
+    if (membersError) throw new Error(membersError.message)
+  }
+
+  const validSongs = input.songs.filter((song) => song.songTitle.trim())
+  if (input.event.type === 'culto' && validSongs.length > 0) {
+    const { error: songsError } = await supabase
+      .from('setlist_songs')
+      .insert(
+        validSongs.map((song, index) => ({
+          event_id: eventId,
+          order_index: index,
+          song_title: song.songTitle.trim(),
+          soloist_id: song.soloistId,
+          key_note: song.keyNote,
+          reference_link: song.referenceLink,
+        }))
+      )
+
+    if (songsError) throw new Error(songsError.message)
+  }
+
+  revalidatePath('/agenda')
+  revalidatePath('/dashboard')
+  revalidatePath('/musicas')
 }
