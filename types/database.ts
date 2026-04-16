@@ -292,6 +292,27 @@ export interface Database {
         }
         Relationships: []
       }
+      chat_message_reads: {
+        Row: {
+          id: string
+          message_id: string
+          profile_id: string
+          delivered_at: string
+          read_at: string | null
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          profile_id: string
+          delivered_at?: string
+          read_at?: string | null
+        }
+        Update: {
+          delivered_at?: string
+          read_at?: string | null
+        }
+        Relationships: []
+      }
       laia_messages: {
         Row: {
           id: string
@@ -362,6 +383,7 @@ export type CommunionPostInsert = Database['public']['Tables']['communion_posts'
 
 export type ChatMessage = Database['public']['Tables']['chat_messages']['Row']
 export type ChatMessageInsert = Database['public']['Tables']['chat_messages']['Insert']
+export type ChatMessageRead = Database['public']['Tables']['chat_message_reads']['Row']
 
 export type LaiaMessage = Database['public']['Tables']['laia_messages']['Row']
 export type LaiaMessageInsert = Database['public']['Tables']['laia_messages']['Insert']

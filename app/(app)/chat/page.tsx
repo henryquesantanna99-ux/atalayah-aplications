@@ -18,6 +18,14 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
     .order('created_at', { ascending: true })
     .limit(50)
 
+  const messageIds = ((messages ?? []) as any[]).map((message) => message.id)
+  const { data: reads } = messageIds.length > 0
+    ? await supabase
+        .from('chat_message_reads')
+        .select('*')
+        .in('message_id', messageIds)
+    : { data: [] }
+
   // Get Laia usage for today
   const today = new Date().toISOString().split('T')[0]
   const { data: laiaUsage } = await supabase
@@ -34,6 +42,7 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
       <PageHeader title="Chat do Grupo" subtitle="AtalaYah — Louvor" />
       <ChatRoom
         initialMessages={(messages ?? []) as any[]}
+        initialReads={(reads ?? []) as any[]}
         userId={user!.id}
         laiaCallsUsed={laiaCallsUsed}
         initialDraft={searchParams.draft ?? ''}

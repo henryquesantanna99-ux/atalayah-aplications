@@ -1,29 +1,39 @@
 'use client'
 
 import React, { useEffect, useState, useRef } from 'react'
-import { Send, Sparkles } from 'lucide-react'
+import { Mic, Send, Sparkles, Square, X } from 'lucide-react'
 import { toast } from 'sonner'
+import type { ChatMessageWithAuthor } from '@/types/database'
 
 interface MessageInputProps {
   onSend: (content: string) => Promise<void>
+  onSendAudio: (blob: Blob) => Promise<void>
   onLaiaCall: (question: string) => Promise<void>
   laiaCallsRemaining: number
   userId: string
   initialText?: string
+  replyTo: ChatMessageWithAuthor | null
+  onCancelReply: () => void
 }
 
 export function MessageInput({
   onSend,
+  onSendAudio,
   onLaiaCall,
   laiaCallsRemaining,
   initialText = '',
+  replyTo,
+  onCancelReply,
 }: MessageInputProps) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
+  const [recording, setRecording] = useState(false)
   const [showLaiaInput, setShowLaiaInput] = useState(false)
   const [laiaQuestion, setLaiaQuestion] = useState('')
   const [callingLaia, setCallingLaia] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
 
   useEffect(() => {
     if (!initialText) return
@@ -45,6 +55,50 @@ export function MessageInput({
     } finally {
       setSending(false)
     }
+  }
+
+  async function startRecording() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error('Gravação de áudio não suportada neste navegador.')
+      return
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      chunksRef.current = []
+      recorderRef.current = recorder
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data)
+      }
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach((track) => track.stop())
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        if (blob.size === 0) return
+
+        setSending(true)
+        try {
+          await onSendAudio(blob)
+        } catch {
+          toast.error('Erro ao enviar áudio.')
+        } finally {
+          setSending(false)
+        }
+      }
+
+      recorder.start()
+      setRecording(true)
+    } catch {
+      toast.error('Não foi possível acessar o microfone.')
+    }
+  }
+
+  function stopRecording() {
+    recorderRef.current?.stop()
+    recorderRef.current = null
+    setRecording(false)
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -77,6 +131,25 @@ export function MessageInput({
 
   return (
     <div className="space-y-2">
+      {replyTo && (
+        <div className="flex items-start justify-between gap-3 rounded-card border border-brand/30 bg-brand/10 px-3 py-2 text-sm">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-brand">Respondendo</p>
+            <p className="truncate text-[#94A3B8]">
+              {replyTo.type === 'audio' ? 'Mensagem de áudio' : replyTo.content}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Cancelar resposta"
+            className="p-1 text-[#64748B] hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
       {/* Laia call input */}
       {showLaiaInput && (
         <div className="flex gap-2 bg-navy-800 border border-brand/30 rounded-card p-2">
@@ -125,6 +198,19 @@ export function MessageInput({
         </div>
 
         {/* Laia button */}
+        <button
+          onClick={recording ? stopRecording : startRecording}
+          disabled={sending}
+          aria-label={recording ? 'Parar gravação' : 'Gravar áudio'}
+          className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-colors disabled:opacity-40 ${
+            recording
+              ? 'bg-red-500/20 border-red-500/40 text-red-300'
+              : 'bg-navy-800 border-white/[0.08] text-[#64748B] hover:text-brand hover:border-brand/30'
+          }`}
+        >
+          {recording ? <Square className="w-4 h-4" aria-hidden="true" /> : <Mic className="w-4 h-4" aria-hidden="true" />}
+        </button>
+
         <button
           onClick={() => {
             if (laiaCallsRemaining <= 0) {
