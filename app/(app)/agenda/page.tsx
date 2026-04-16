@@ -22,9 +22,9 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
     .map((id) => id.trim())
     .filter(Boolean) ?? []
 
-  // Fetch events for current month ± 1 month for navigation
-  const startDate = new Date(year, month - 2, 1).toISOString().split('T')[0]
-  const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0]
+  // Fetch the full year so the monthly and annual views share the same data.
+  const startDate = new Date(year, 0, 1).toISOString().split('T')[0]
+  const endDate = new Date(year, 11, 31).toISOString().split('T')[0]
 
   const { data: events } = await supabase
     .from('events')

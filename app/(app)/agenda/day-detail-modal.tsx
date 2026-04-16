@@ -11,6 +11,20 @@ import type { EventMember, Profile, SetlistSong } from '@/types/database'
 import { assignEventMember, deleteEvent, removeEventMember } from './actions'
 import { EventFormModal } from './event-form-modal'
 
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  culto: 'Culto',
+  ensaio: 'Ensaio',
+  comunhao: 'Comunhão',
+  evento_externo: 'Evento Externo',
+}
+
+const EVENT_TYPE_BADGES: Record<string, string> = {
+  culto: 'bg-brand/20 text-brand border-brand/30',
+  ensaio: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+  comunhao: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  evento_externo: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+}
+
 const MONTHS_PT = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
@@ -237,7 +251,14 @@ export function DayDetailModal({
           {/* Event info */}
           <div>
             <div className="flex items-start justify-between gap-3 mb-2">
-              <h3 className="text-lg font-bold text-white">{selectedEvent.title}</h3>
+              <div>
+                <h3 className="text-lg font-bold text-white">{selectedEvent.title}</h3>
+                <span className={`mt-1 inline-flex text-[10px] font-medium px-2 py-1 rounded-full border ${
+                  EVENT_TYPE_BADGES[selectedEvent.type] ?? 'bg-white/10 text-white/70 border-white/10'
+                }`}>
+                  {EVENT_TYPE_LABELS[selectedEvent.type] ?? selectedEvent.type}
+                </span>
+              </div>
               {isAdmin && (
                 <div className="flex items-center gap-2">
                   <EventFormModal
@@ -257,6 +278,16 @@ export function DayDetailModal({
                   </button>
                 </div>
               )}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div className="rounded-card border border-white/[0.06] bg-navy-800/40 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-[#64748B]">Escala</p>
+                <p className="text-sm font-semibold text-white">{members.length} integrante(s)</p>
+              </div>
+              <div className="rounded-card border border-white/[0.06] bg-navy-800/40 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-[#64748B]">Músicas</p>
+                <p className="text-sm font-semibold text-white">{songs.length} música(s)</p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-3 text-sm text-[#94A3B8]">
               {selectedEvent.arrival_time && (
@@ -406,6 +437,11 @@ export function DayDetailModal({
                   </ul>
                 </div>
               )}
+              {members.length === 0 && (
+                <div className="rounded-card border border-white/[0.06] bg-navy-800/40 p-3 text-sm text-[#64748B]">
+                  Nenhum integrante escalado para este evento.
+                </div>
+              )}
 
               {/* Setlist */}
               {songs.length > 0 && (
@@ -427,6 +463,11 @@ export function DayDetailModal({
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+              {selectedEvent.type === 'culto' && songs.length === 0 && (
+                <div className="rounded-card border border-white/[0.06] bg-navy-800/40 p-3 text-sm text-[#64748B]">
+                  Nenhuma música definida para este culto.
                 </div>
               )}
             </>
