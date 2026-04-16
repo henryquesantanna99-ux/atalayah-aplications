@@ -83,15 +83,20 @@ export function CommunionEvents({ events, isAdmin }: CommunionEventsProps) {
                 </p>
               )}
               {event.meet_link && (
-                <a
-                  href={event.meet_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-card bg-brand/15 border border-brand/30 px-3 py-2 text-sm text-brand hover:bg-brand/25 transition-colors"
-                >
-                  <Video className="w-4 h-4" aria-hidden="true" />
-                  Entrar na reunião
-                </a>
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href={event.meet_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-card bg-brand/15 border border-brand/30 px-3 py-2 text-sm text-brand hover:bg-brand/25 transition-colors"
+                  >
+                    <Video className="w-4 h-4" aria-hidden="true" />
+                    Entrar na reunião
+                  </a>
+                  {isAdmin && (
+                    <CreateMeetButton eventId={event.id} mode="end" />
+                  )}
+                </div>
               )}
               {isAdmin && !event.meet_link && (
                 <CreateMeetButton eventId={event.id} />

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Clock, Check, Trash2, UserPlus, Video } from 'lucide-react'
+import { X, Clock, Check, Trash2, UserPlus } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { MomentBadge } from '@/components/ui/moment-badge'
 import { createClient } from '@/lib/supabase/client'
@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import type { EventMember, Profile, SetlistSong } from '@/types/database'
 import { assignEventMember, deleteEvent, removeEventMember } from './actions'
 import { EventFormModal } from './event-form-modal'
+import { CreateMeetButton } from '../comunhao/create-meet-button'
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
   culto: 'Culto',
@@ -203,39 +204,6 @@ export function DayDetailModal({
     }
   }
 
-  async function handleCreateMeet() {
-    setAdminProcessing(`meet-${selectedEvent.id}`)
-    try {
-      const response = await fetch('/api/google/meet', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId: selectedEvent.id }),
-      })
-      const data = await response.json()
-
-      if (!response.ok) {
-        if (response.status === 428 && Array.isArray(data.missing)) {
-          toast.error(`Configure no Vercel: ${data.missing.join(', ')}`)
-        } else {
-          toast.error(data.error ?? 'Erro ao criar Google Meet.')
-        }
-        return
-      }
-
-      toast.success('Google Meet criado.')
-      setSelectedEvent((current) => ({
-        ...current,
-        is_online: true,
-        meet_link: data.meetLink,
-      }))
-      router.refresh()
-    } catch {
-      toast.error('Erro ao criar Google Meet.')
-    } finally {
-      setAdminProcessing(null)
-    }
-  }
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -348,8 +316,9 @@ export function DayDetailModal({
                   <p><strong className="text-white">Local:</strong> {selectedEvent.location}</p>
                 )}
                 {selectedEvent.meet_link && (
-                  <p>
-                    <strong className="text-white">Reunião:</strong>{' '}
+                  <div className="space-y-2">
+                    <p>
+                      <strong className="text-white">Reunião:</strong>{' '}
                     <a
                       href={selectedEvent.meet_link}
                       target="_blank"
@@ -358,18 +327,30 @@ export function DayDetailModal({
                     >
                       abrir link
                     </a>
-                  </p>
+                    </p>
+                    {isAdmin && (
+                      <CreateMeetButton
+                        eventId={selectedEvent.id}
+                        mode="end"
+                        onEnded={() => setSelectedEvent((current) => ({
+                          ...current,
+                          is_online: false,
+                          meet_link: null,
+                          google_calendar_event_id: null,
+                        }))}
+                      />
+                    )}
+                  </div>
                 )}
                 {isAdmin && !selectedEvent.meet_link && (
-                  <button
-                    type="button"
-                    onClick={handleCreateMeet}
-                    disabled={adminProcessing === `meet-${selectedEvent.id}`}
-                    className="mt-2 inline-flex items-center gap-2 rounded-card bg-brand/15 border border-brand/30 px-3 py-2 text-sm text-brand hover:bg-brand/25 transition-colors disabled:opacity-50"
-                  >
-                    <Video className="w-4 h-4" aria-hidden="true" />
-                    {adminProcessing === `meet-${selectedEvent.id}` ? 'Criando...' : 'Criar Google Meet'}
-                  </button>
+                  <CreateMeetButton
+                    eventId={selectedEvent.id}
+                    onCreated={(meetLink) => setSelectedEvent((current) => ({
+                      ...current,
+                      is_online: true,
+                      meet_link: meetLink,
+                    }))}
+                  />
                 )}
               </div>
             )}

@@ -31,12 +31,12 @@ function eventDateTime(date: string, time: string | null, fallbackHour: number) 
   return value
 }
 
-export async function POST(request: Request) {
+async function requireAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return { supabase, error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   }
 
   const { data: profile } = await supabase
@@ -46,19 +46,55 @@ export async function POST(request: Request) {
     .single()
 
   if (profile?.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    return { supabase, error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   }
 
+  return { supabase, error: null }
+}
+
+async function getAccessToken() {
   const missing = missingConfig()
   if (missing.length > 0) {
-    return NextResponse.json(
+    return {
+      error: NextResponse.json(
       {
         error: 'Google Calendar integration is not configured.',
         missing,
       },
       { status: 428 }
-    )
+      ),
+    }
   }
+
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN!,
+      grant_type: 'refresh_token',
+    }),
+  })
+
+  const tokenJson = await tokenResponse.json() as GoogleTokenResponse
+  if (!tokenResponse.ok || !tokenJson.access_token) {
+    return {
+      error: NextResponse.json(
+      {
+        error: tokenJson.error_description ?? tokenJson.error ?? 'Could not authorize Google Calendar.',
+      },
+      { status: 502 }
+      ),
+    }
+  }
+
+  return { accessToken: tokenJson.access_token, error: null }
+}
+
+export async function POST(request: Request) {
+  const { supabase, error: adminError } = await requireAdmin()
+  if (adminError) return adminError
 
   const { eventId } = await request.json()
   if (!eventId) {
@@ -86,26 +122,8 @@ export async function POST(request: Request) {
     })
   }
 
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN!,
-      grant_type: 'refresh_token',
-    }),
-  })
-
-  const tokenJson = await tokenResponse.json() as GoogleTokenResponse
-  if (!tokenResponse.ok || !tokenJson.access_token) {
-    return NextResponse.json(
-      {
-        error: tokenJson.error_description ?? tokenJson.error ?? 'Could not authorize Google Calendar.',
-      },
-      { status: 502 }
-    )
-  }
+  const { accessToken, error: tokenError } = await getAccessToken()
+  if (tokenError) return tokenError
 
   const calendarId = process.env.GOOGLE_CALENDAR_ID ?? 'primary'
   const startDateTime = eventDateTime(event.date, event.start_time, 20)
@@ -116,7 +134,7 @@ export async function POST(request: Request) {
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${tokenJson.access_token}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -167,4 +185,63 @@ export async function POST(request: Request) {
     meetLink,
     calendarEventId: calendarJson.id,
   })
+}
+
+export async function DELETE(request: Request) {
+  const { supabase, error: adminError } = await requireAdmin()
+  if (adminError) return adminError
+
+  const { eventId } = await request.json()
+  if (!eventId) {
+    return NextResponse.json({ error: 'eventId is required' }, { status: 400 })
+  }
+
+  const { data: event, error: eventError } = await supabase
+    .from('events')
+    .select('id, google_calendar_event_id')
+    .eq('id', eventId)
+    .single()
+
+  if (eventError || !event) {
+    return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+  }
+
+  const { accessToken, error: tokenError } = await getAccessToken()
+  if (tokenError) return tokenError
+
+  if (event.google_calendar_event_id) {
+    const calendarId = process.env.GOOGLE_CALENDAR_ID ?? 'primary'
+    const calendarResponse = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(event.google_calendar_event_id)}?sendUpdates=all`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    )
+
+    if (!calendarResponse.ok && calendarResponse.status !== 404 && calendarResponse.status !== 410) {
+      const data = await calendarResponse.json().catch(() => null)
+      return NextResponse.json(
+        { error: data?.error?.message ?? 'Could not end Google Meet event.' },
+        { status: 502 }
+      )
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from('events')
+    .update({
+      is_online: false,
+      meet_link: null,
+      google_calendar_event_id: null,
+    })
+    .eq('id', event.id)
+
+  if (updateError) {
+    return NextResponse.json({ error: updateError.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
 }
