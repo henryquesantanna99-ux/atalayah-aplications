@@ -5,6 +5,20 @@ import { createClient } from '@/lib/supabase/server'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
+interface EventInput {
+  title: string
+  type: EventType
+  date: string
+  arrival_time: string | null
+  start_time: string | null
+  notes: string | null
+  agenda_topic?: string | null
+  conductor_id?: string | null
+  location?: string | null
+  is_online?: boolean
+  meet_link?: string | null
+}
+
 async function requireAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -20,14 +34,7 @@ async function requireAdmin() {
   return { supabase, user }
 }
 
-export async function createEvent(input: {
-  title: string
-  type: EventType
-  date: string
-  arrival_time: string | null
-  start_time: string | null
-  notes: string | null
-}) {
+export async function createEvent(input: EventInput) {
   const { supabase, user } = await requireAdmin()
   const { error } = await supabase.from('events').insert({
     ...input,
@@ -37,18 +44,12 @@ export async function createEvent(input: {
   if (error) throw new Error(error.message)
   revalidatePath('/agenda')
   revalidatePath('/musicas')
+  revalidatePath('/comunhao')
 }
 
 export async function updateEvent(
   eventId: string,
-  input: {
-    title: string
-    type: EventType
-    date: string
-    arrival_time: string | null
-    start_time: string | null
-    notes: string | null
-  }
+  input: EventInput
 ) {
   const { supabase } = await requireAdmin()
   const { error } = await supabase
@@ -59,6 +60,7 @@ export async function updateEvent(
   if (error) throw new Error(error.message)
   revalidatePath('/agenda')
   revalidatePath('/musicas')
+  revalidatePath('/comunhao')
 }
 
 export async function deleteEvent(eventId: string) {
@@ -68,6 +70,7 @@ export async function deleteEvent(eventId: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/agenda')
   revalidatePath('/musicas')
+  revalidatePath('/comunhao')
 }
 
 export async function assignEventMember(input: {
@@ -102,14 +105,7 @@ export async function removeEventMember(eventMemberId: string) {
 
 export async function createScale(input: {
   eventId: string | null
-  event: {
-    title: string
-    type: EventType
-    date: string
-    arrival_time: string | null
-    start_time: string | null
-    notes: string | null
-  }
+  event: EventInput
   members: {
     profileId: string
     functionName: string
@@ -175,4 +171,5 @@ export async function createScale(input: {
   revalidatePath('/agenda')
   revalidatePath('/dashboard')
   revalidatePath('/musicas')
+  revalidatePath('/comunhao')
 }

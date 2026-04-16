@@ -28,7 +28,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
 
   const { data: events } = await supabase
     .from('events')
-    .select('id, title, type, date, arrival_time, start_time, notes')
+    .select('id, title, type, date, arrival_time, start_time, notes, agenda_topic, conductor_id, location, is_online, meet_link')
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date')
@@ -45,7 +45,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
     ? await Promise.all([
         supabase
           .from('events')
-          .select('id, title, type, date, arrival_time, start_time, notes')
+          .select('id, title, type, date, arrival_time, start_time, notes, agenda_topic, conductor_id, location, is_online, meet_link')
           .order('date', { ascending: false })
           .limit(40),
         supabase
@@ -69,7 +69,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
                 profiles={(scaleProfiles ?? []) as ScaleProfile[]}
                 initialSelectedMemberIds={initialScaleMemberIds}
               />
-              <EventFormModal />
+              <EventFormModal profiles={(scaleProfiles ?? []) as ScaleProfile[]} />
             </div>
           ) : undefined
         }

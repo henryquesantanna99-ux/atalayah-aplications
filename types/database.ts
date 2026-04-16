@@ -83,6 +83,11 @@ export interface Database {
           arrival_time: string | null
           start_time: string | null
           notes: string | null
+          agenda_topic: string | null
+          conductor_id: string | null
+          location: string | null
+          is_online: boolean
+          meet_link: string | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -95,6 +100,11 @@ export interface Database {
           arrival_time?: string | null
           start_time?: string | null
           notes?: string | null
+          agenda_topic?: string | null
+          conductor_id?: string | null
+          location?: string | null
+          is_online?: boolean
+          meet_link?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -106,6 +116,11 @@ export interface Database {
           arrival_time?: string | null
           start_time?: string | null
           notes?: string | null
+          agenda_topic?: string | null
+          conductor_id?: string | null
+          location?: string | null
+          is_online?: boolean
+          meet_link?: string | null
           updated_at?: string
         }
         Relationships: []

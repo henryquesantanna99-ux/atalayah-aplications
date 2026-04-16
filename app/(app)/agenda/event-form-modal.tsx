@@ -23,10 +23,21 @@ interface CalendarEvent {
   arrival_time: string | null
   start_time: string | null
   notes: string | null
+  agenda_topic?: string | null
+  conductor_id?: string | null
+  location?: string | null
+  is_online?: boolean
+  meet_link?: string | null
+}
+
+interface ProfileOption {
+  id: string
+  full_name: string | null
 }
 
 interface EventFormModalProps {
   event?: CalendarEvent
+  profiles?: ProfileOption[]
   triggerLabel?: string
   triggerVariant?: 'primary' | 'ghost'
 }
@@ -38,10 +49,16 @@ const emptyForm = {
   arrival_time: '',
   start_time: '',
   notes: '',
+  agenda_topic: '',
+  conductor_id: '',
+  location: '',
+  is_online: false,
+  meet_link: '',
 }
 
 export function EventFormModal({
   event,
+  profiles = [],
   triggerLabel,
   triggerVariant = 'primary',
 }: EventFormModalProps) {
@@ -56,6 +73,11 @@ export function EventFormModal({
         arrival_time: event.arrival_time?.slice(0, 5) ?? '',
         start_time: event.start_time?.slice(0, 5) ?? '',
         notes: event.notes ?? '',
+        agenda_topic: event.agenda_topic ?? '',
+        conductor_id: event.conductor_id ?? '',
+        location: event.location ?? '',
+        is_online: event.is_online ?? false,
+        meet_link: event.meet_link ?? '',
       }
     : emptyForm
   )
@@ -65,7 +87,11 @@ export function EventFormModal({
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) {
-    setForm((current) => ({ ...current, [e.target.name]: e.target.value }))
+    const target = e.target
+    const value = target instanceof HTMLInputElement && target.type === 'checkbox'
+      ? target.checked
+      : target.value
+    setForm((current) => ({ ...current, [target.name]: value }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -83,6 +109,11 @@ export function EventFormModal({
       arrival_time: form.arrival_time || null,
       start_time: form.start_time || null,
       notes: form.notes.trim() || null,
+      agenda_topic: form.type === 'comunhao' ? form.agenda_topic.trim() || null : null,
+      conductor_id: form.type === 'comunhao' ? form.conductor_id || null : null,
+      location: form.type === 'comunhao' ? form.location.trim() || null : null,
+      is_online: form.type === 'comunhao' ? form.is_online : false,
+      meet_link: form.type === 'comunhao' ? form.meet_link.trim() || null : null,
     }
 
     try {
@@ -200,6 +231,88 @@ export function EventFormModal({
               />
             </div>
           </div>
+
+          {form.type === 'comunhao' && (
+            <div className="space-y-3 rounded-card border border-white/[0.06] bg-navy-800/40 p-3">
+              <p className="text-xs font-medium text-[#94A3B8] uppercase tracking-wide">
+                Detalhes da Comunhão
+              </p>
+              <div>
+                <label htmlFor="agenda-topic" className="block text-xs text-[#94A3B8] mb-1">
+                  Pauta
+                </label>
+                <input
+                  id="agenda-topic"
+                  name="agenda_topic"
+                  value={form.agenda_topic}
+                  onChange={handleChange}
+                  placeholder="Tema ou pauta do encontro"
+                  className="w-full px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="conductor-id" className="block text-xs text-[#94A3B8] mb-1">
+                    Condutor
+                  </label>
+                  <select
+                    id="conductor-id"
+                    name="conductor_id"
+                    value={form.conductor_id}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand"
+                  >
+                    <option value="">Selecionar</option>
+                    {profiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.full_name ?? 'Sem nome'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="location" className="block text-xs text-[#94A3B8] mb-1">
+                    Local
+                  </label>
+                  <input
+                    id="location"
+                    name="location"
+                    value={form.location}
+                    onChange={handleChange}
+                    placeholder="Online, casa, igreja..."
+                    className="w-full px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-[#94A3B8]">
+                <input
+                  type="checkbox"
+                  name="is_online"
+                  checked={form.is_online}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-white/[0.08] accent-brand"
+                />
+                Reunião online
+              </label>
+
+              <div>
+                <label htmlFor="meet-link" className="block text-xs text-[#94A3B8] mb-1">
+                  Link da reunião
+                </label>
+                <input
+                  id="meet-link"
+                  name="meet_link"
+                  type="url"
+                  value={form.meet_link}
+                  onChange={handleChange}
+                  placeholder="https://meet.google.com/..."
+                  className="w-full px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <label htmlFor="event-notes" className="block text-xs text-[#94A3B8] mb-1">

@@ -24,6 +24,11 @@ interface CalendarEvent {
   arrival_time: string | null
   start_time: string | null
   notes: string | null
+  agenda_topic?: string | null
+  conductor_id?: string | null
+  location?: string | null
+  is_online?: boolean
+  meet_link?: string | null
 }
 
 interface DayDetailModalProps {
@@ -237,6 +242,7 @@ export function DayDetailModal({
                 <div className="flex items-center gap-2">
                   <EventFormModal
                     event={selectedEvent}
+                    profiles={profiles}
                     triggerLabel="Editar"
                     triggerVariant="ghost"
                   />
@@ -267,6 +273,29 @@ export function DayDetailModal({
             </div>
             {selectedEvent.notes && (
               <p className="text-sm text-[#94A3B8] mt-2">{selectedEvent.notes}</p>
+            )}
+            {selectedEvent.type === 'comunhao' && (
+              <div className="mt-3 space-y-1 rounded-card border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-[#94A3B8]">
+                {selectedEvent.agenda_topic && (
+                  <p><strong className="text-white">Pauta:</strong> {selectedEvent.agenda_topic}</p>
+                )}
+                {selectedEvent.location && (
+                  <p><strong className="text-white">Local:</strong> {selectedEvent.location}</p>
+                )}
+                {selectedEvent.meet_link && (
+                  <p>
+                    <strong className="text-white">Reunião:</strong>{' '}
+                    <a
+                      href={selectedEvent.meet_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand hover:text-brand-light"
+                    >
+                      abrir link
+                    </a>
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
