@@ -4,9 +4,10 @@ import { LaiaFloatingBadge } from '@/components/laia/laia-floating-badge'
 import { MonthlyCalendar } from './monthly-calendar'
 import { EventFormModal } from './event-form-modal'
 import { ScaleFormModal } from './scale-form-modal'
+import type { ScaleEventOption, ScaleProfile } from './scale-form-modal'
 
 interface AgendaPageProps {
-  searchParams: { year?: string; month?: string }
+  searchParams: { year?: string; month?: string; scaleMembers?: string }
 }
 
 export default async function AgendaPage({ searchParams }: AgendaPageProps) {
@@ -16,6 +17,10 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
   const now = new Date()
   const year = parseInt(searchParams.year ?? String(now.getFullYear()))
   const month = parseInt(searchParams.month ?? String(now.getMonth() + 1))
+  const initialScaleMemberIds = searchParams.scaleMembers
+    ?.split(',')
+    .map((id) => id.trim())
+    .filter(Boolean) ?? []
 
   // Fetch events for current month ± 1 month for navigation
   const startDate = new Date(year, month - 2, 1).toISOString().split('T')[0]
@@ -59,8 +64,11 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
         actions={
           isAdmin ? (
             <div className="flex flex-wrap items-center gap-2">
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <ScaleFormModal events={(scaleEvents ?? []) as any[]} profiles={(scaleProfiles ?? []) as any[]} />
+              <ScaleFormModal
+                events={(scaleEvents ?? []) as ScaleEventOption[]}
+                profiles={(scaleProfiles ?? []) as ScaleProfile[]}
+                initialSelectedMemberIds={initialScaleMemberIds}
+              />
               <EventFormModal />
             </div>
           ) : undefined

@@ -12,6 +12,7 @@ interface ChatRoomProps {
   initialMessages: ChatMessageWithAuthor[]
   userId: string
   laiaCallsUsed: number
+  initialDraft?: string
 }
 
 function formatTime(dateStr: string) {
@@ -25,6 +26,7 @@ export function ChatRoom({
   initialMessages,
   userId,
   laiaCallsUsed,
+  initialDraft = '',
 }: ChatRoomProps) {
   const supabase = createClient()
   const [messages, setMessages] = useState<ChatMessageWithAuthor[]>(initialMessages)
@@ -181,6 +183,7 @@ export function ChatRoom({
           onLaiaCall={handleLaiaCall}
           laiaCallsRemaining={2 - laiaUsed}
           userId={userId}
+          initialText={initialDraft}
         />
       </div>
     </div>

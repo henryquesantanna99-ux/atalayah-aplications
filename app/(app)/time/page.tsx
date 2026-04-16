@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/layout/page-header'
 import { LaiaFloatingBadge } from '@/components/laia/laia-floating-badge'
@@ -33,6 +34,22 @@ export default async function TimePage() {
         .order('created_at')
     : { data: [] }
 
+  const { data: scales } = isAdmin
+    ? await supabase
+        .from('events')
+        .select(`
+          id,
+          title,
+          type,
+          date,
+          start_time,
+          event_members(id, instrument, profiles(id, full_name)),
+          setlist_songs(id, song_title, key_note, profiles(id, full_name))
+        `)
+        .order('date', { ascending: false })
+        .limit(50)
+    : { data: [] }
+
   return (
     <>
       <PageHeader
@@ -47,6 +64,7 @@ export default async function TimePage() {
           members={(members ?? []) as ProfileWithTeam[]}
           isAdmin={isAdmin}
           currentUserId={user!.id}
+          scales={(scales ?? []) as any[]}
         />
       </div>
       <LaiaFloatingBadge tip="Dicas de gestão de equipes" />

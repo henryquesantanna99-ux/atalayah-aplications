@@ -15,7 +15,7 @@ import { createScale } from './actions'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
-interface EventOption {
+export interface ScaleEventOption {
   id: string
   title: string
   type: EventType
@@ -25,7 +25,7 @@ interface EventOption {
   notes: string | null
 }
 
-interface ScaleProfile {
+export interface ScaleProfile {
   id: string
   full_name: string | null
   team_members: {
@@ -36,8 +36,9 @@ interface ScaleProfile {
 }
 
 interface ScaleFormModalProps {
-  events: EventOption[]
+  events: ScaleEventOption[]
   profiles: ScaleProfile[]
+  initialSelectedMemberIds?: string[]
 }
 
 interface SongDraft {
@@ -83,9 +84,21 @@ function availableFunctions(profile: ScaleProfile) {
   return Array.from(new Set(values))
 }
 
-export function ScaleFormModal({ events, profiles }: ScaleFormModalProps) {
+export function ScaleFormModal({
+  events,
+  profiles,
+  initialSelectedMemberIds,
+}: ScaleFormModalProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const initialSelection = useMemo(() => {
+    const selected = new Set(initialSelectedMemberIds ?? [])
+    return Object.fromEntries(
+      profiles
+        .filter((profile) => selected.has(profile.id))
+        .map((profile) => [profile.id, availableFunctions(profile)[0] ?? ''])
+    )
+  }, [initialSelectedMemberIds, profiles])
+  const [open, setOpen] = useState((initialSelectedMemberIds?.length ?? 0) > 0)
   const [saving, setSaving] = useState(false)
   const [selectedEventId, setSelectedEventId] = useState('')
   const [eventForm, setEventForm] = useState({
@@ -96,7 +109,7 @@ export function ScaleFormModal({ events, profiles }: ScaleFormModalProps) {
     start_time: '',
     notes: '',
   })
-  const [selectedMembers, setSelectedMembers] = useState<Record<string, string>>({})
+  const [selectedMembers, setSelectedMembers] = useState<Record<string, string>>(initialSelection)
   const [songs, setSongs] = useState<SongDraft[]>([newSong()])
 
   const selectedEvent = events.find((event) => event.id === selectedEventId)

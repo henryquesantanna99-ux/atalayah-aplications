@@ -3,7 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/layout/page-header'
 import { ChatRoom } from './chat-room'
 
-export default async function ChatPage() {
+interface ChatPageProps {
+  searchParams: { draft?: string }
+}
+
+export default async function ChatPage({ searchParams }: ChatPageProps) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -32,6 +36,7 @@ export default async function ChatPage() {
         initialMessages={(messages ?? []) as any[]}
         userId={user!.id}
         laiaCallsUsed={laiaCallsUsed}
+        initialDraft={searchParams.draft ?? ''}
       />
     </>
   )

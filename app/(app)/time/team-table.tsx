@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import type { ComponentProps } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   MoreHorizontal,
   ShieldCheck,
@@ -18,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { updateMemberStatus, updateMemberRole } from './actions'
 import { MemberTeamModal } from './member-team-modal'
+import { ScalesModal } from './scales-modal'
 import { toast } from 'sonner'
 import type { Profile, TeamMember } from '@/types/database'
 
@@ -27,6 +30,7 @@ interface TeamTableProps {
   members: MemberWithTeam[]
   isAdmin: boolean
   currentUserId: string
+  scales: ComponentProps<typeof ScalesModal>['scales']
 }
 
 const STATUS_STYLES = {
@@ -45,14 +49,53 @@ export function TeamTable({
   members,
   isAdmin,
   currentUserId,
+  scales,
 }: TeamTableProps) {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [processing, setProcessing] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
 
   const filtered = members.filter((m) =>
     m.full_name?.toLowerCase().includes(search.toLowerCase()) ||
     m.email.toLowerCase().includes(search.toLowerCase())
   )
+  const filteredIds = filtered.map((member) => member.id)
+  const allVisibleSelected = filteredIds.length > 0 &&
+    filteredIds.every((id) => selectedIds.includes(id))
+  const selectedMembers = members.filter((member) => selectedIds.includes(member.id))
+
+  function toggleSelected(profileId: string) {
+    setSelectedIds((current) =>
+      current.includes(profileId)
+        ? current.filter((id) => id !== profileId)
+        : [...current, profileId]
+    )
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter((id) => !filteredIds.includes(id))
+      }
+      return Array.from(new Set([...current, ...filteredIds]))
+    })
+  }
+
+  function createScaleWithSelected() {
+    if (selectedIds.length === 0) return
+    router.push(`/agenda?scaleMembers=${selectedIds.join(',')}`)
+  }
+
+  function messageSelectedMembers() {
+    if (selectedMembers.length === 0) return
+    const mentions = selectedMembers
+      .map((member) => member.full_name ?? member.email)
+      .map((name) => `@${name}`)
+      .join(' ')
+
+    router.push(`/chat?draft=${encodeURIComponent(`${mentions} `)}`)
+  }
 
   async function handleStatusChange(
     profileId: string,
@@ -83,20 +126,49 @@ export function TeamTable({
 
   return (
     <div className="space-y-4">
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B]"
-          aria-hidden="true"
-        />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nome ou email..."
-          aria-label="Buscar integrantes"
-          className="w-full pl-9 pr-4 py-2.5 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
-        />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        {/* Search */}
+        <div className="relative max-w-sm">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748B]"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome ou email..."
+            aria-label="Buscar integrantes"
+            className="w-full pl-9 pr-4 py-2.5 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
+          />
+        </div>
+
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedIds.length > 0 && (
+              <span className="text-xs text-[#64748B]">
+                {selectedIds.length} selecionado(s)
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={createScaleWithSelected}
+              disabled={selectedIds.length === 0}
+              className="px-3 py-2 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-40"
+            >
+              Criar escala
+            </button>
+            <button
+              type="button"
+              onClick={messageSelectedMembers}
+              disabled={selectedIds.length === 0}
+              className="px-3 py-2 rounded-card border border-white/[0.08] text-[#94A3B8] text-sm hover:text-white hover:border-white/20 transition-colors disabled:opacity-40"
+            >
+              Enviar mensagem
+            </button>
+            <ScalesModal scales={scales} />
+          </div>
+        )}
       </div>
 
       {/* Desktop table */}
@@ -105,6 +177,16 @@ export function TeamTable({
           <thead>
             <tr className="border-b border-white/[0.06] bg-navy-900">
               <th className="text-left py-3 px-5 text-xs font-medium text-[#64748B]">Colaborador</th>
+              {isAdmin && (
+                <th className="w-10 py-3 px-4" aria-label="Selecionar integrantes">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    className="h-4 w-4 rounded border-white/[0.08] accent-brand"
+                  />
+                </th>
+              )}
               <th className="text-left py-3 px-4 text-xs font-medium text-[#64748B]">Equipes</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-[#64748B]">Instrumentos</th>
               <th className="text-left py-3 px-4 text-xs font-medium text-[#64748B]">Role</th>
@@ -147,6 +229,17 @@ export function TeamTable({
                       </div>
                     </div>
                   </td>
+                  {isAdmin && (
+                    <td className="py-3 px-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(member.id)}
+                        onChange={() => toggleSelected(member.id)}
+                        aria-label={`Selecionar ${member.full_name ?? member.email}`}
+                        className="h-4 w-4 rounded border-white/[0.08] accent-brand"
+                      />
+                    </td>
+                  )}
                   <td className="py-3 px-4">
                     <div className="flex flex-wrap gap-1">
                       {teams.length > 0
@@ -264,6 +357,15 @@ export function TeamTable({
               className="bg-navy-900 border border-white/[0.06] rounded-card p-4"
             >
               <div className="flex items-center gap-3 mb-3">
+                {isAdmin && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(member.id)}
+                    onChange={() => toggleSelected(member.id)}
+                    aria-label={`Selecionar ${member.full_name ?? member.email}`}
+                    className="h-4 w-4 rounded border-white/[0.08] accent-brand"
+                  />
+                )}
                 <Avatar className="w-10 h-10">
                   <AvatarImage src={member.avatar_url ?? undefined} alt={member.full_name ?? 'Membro'} />
                   <AvatarFallback className="bg-navy-700 text-white text-sm font-bold">

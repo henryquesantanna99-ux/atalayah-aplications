@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { Send, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -9,12 +9,14 @@ interface MessageInputProps {
   onLaiaCall: (question: string) => Promise<void>
   laiaCallsRemaining: number
   userId: string
+  initialText?: string
 }
 
 export function MessageInput({
   onSend,
   onLaiaCall,
   laiaCallsRemaining,
+  initialText = '',
 }: MessageInputProps) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
@@ -22,6 +24,12 @@ export function MessageInput({
   const [laiaQuestion, setLaiaQuestion] = useState('')
   const [callingLaia, setCallingLaia] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (!initialText) return
+    setText(initialText)
+    textareaRef.current?.focus()
+  }, [initialText])
 
   async function handleSend() {
     const content = text.trim()
