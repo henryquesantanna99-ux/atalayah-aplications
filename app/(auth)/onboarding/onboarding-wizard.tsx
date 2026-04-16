@@ -134,7 +134,7 @@ export function OnboardingWizard({
 
     if (error) {
       setSaving(false)
-      toast.error('Erro ao concluir onboarding. Tente novamente.')
+      toast.error(`Erro ao concluir onboarding: ${error.message}`)
       return
     }
 
