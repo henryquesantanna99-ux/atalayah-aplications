@@ -1,6 +1,6 @@
 -- Communion: Bible studies and reflections
 CREATE TABLE communion_posts (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   author_id UUID REFERENCES profiles(id) NOT NULL,
   title TEXT NOT NULL,
   content TEXT,

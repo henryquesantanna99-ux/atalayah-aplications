@@ -1,6 +1,6 @@
 -- Setlist songs for each event
 CREATE TABLE setlist_songs (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   event_id UUID REFERENCES events(id) ON DELETE CASCADE NOT NULL,
   order_index INTEGER NOT NULL DEFAULT 0,
   song_title TEXT NOT NULL,

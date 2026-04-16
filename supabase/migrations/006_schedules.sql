@@ -1,6 +1,6 @@
 -- Monthly schedule linking events to months/years
 CREATE TABLE schedules (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
   year INTEGER NOT NULL,
   event_id UUID REFERENCES events(id) ON DELETE CASCADE NOT NULL,

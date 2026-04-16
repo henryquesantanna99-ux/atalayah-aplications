@@ -1,6 +1,6 @@
 -- Private chat history with Laia AI (per user)
 CREATE TABLE laia_messages (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
   content TEXT NOT NULL,
@@ -9,7 +9,7 @@ CREATE TABLE laia_messages (
 
 -- Daily usage control for Laia calls in group chat
 CREATE TABLE laia_usage (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   used_at DATE NOT NULL DEFAULT CURRENT_DATE,
   count INTEGER NOT NULL DEFAULT 1,

@@ -1,6 +1,6 @@
 -- Events (cultos, ensaios, comunhão)
 CREATE TABLE events (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   title TEXT NOT NULL,
   type TEXT NOT NULL DEFAULT 'culto' CHECK (type IN ('culto', 'ensaio', 'comunhao')),
   date DATE NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE events (
 
 -- Event members (who is scheduled for each event)
 CREATE TABLE event_members (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   event_id UUID REFERENCES events(id) ON DELETE CASCADE NOT NULL,
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   instrument TEXT,

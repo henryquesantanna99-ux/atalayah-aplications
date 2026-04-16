@@ -1,6 +1,6 @@
 -- Group chat messages with Realtime
 CREATE TABLE chat_messages (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   author_id UUID REFERENCES profiles(id) NOT NULL,
   content TEXT NOT NULL,
   type TEXT NOT NULL DEFAULT 'text' CHECK (type IN ('text', 'audio')),

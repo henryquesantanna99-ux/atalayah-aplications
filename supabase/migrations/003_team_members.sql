@@ -1,6 +1,6 @@
 -- Team members: instruments, teams, and roles per member
 CREATE TABLE team_members (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   teams TEXT[] DEFAULT '{}', -- ['Instrumental','Vocal','Som','Mídia','Adm','Liderança']
   function_role TEXT CHECK (function_role IN ('lider', 'integrante')),
