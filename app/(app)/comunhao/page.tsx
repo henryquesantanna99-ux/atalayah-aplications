@@ -26,7 +26,7 @@ export default async function ComunhaoPage() {
   const today = new Date().toISOString().split('T')[0]
   const { data: communionEvents } = await supabase
     .from('events')
-    .select('id, title, date, start_time, arrival_time, agenda_topic, location, is_online, meet_link, profiles!events_conductor_id_fkey(id, full_name)')
+    .select('id, title, date, start_time, arrival_time, agenda_topic, location, is_online, meet_link, google_calendar_event_id, profiles!events_conductor_id_fkey(id, full_name)')
     .eq('type', 'comunhao')
     .gte('date', today)
     .order('date', { ascending: true })
@@ -43,7 +43,7 @@ export default async function ComunhaoPage() {
       />
       <div className="p-6 max-w-3xl space-y-6">
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <CommunionEvents events={(communionEvents ?? []) as any[]} />
+        <CommunionEvents events={(communionEvents ?? []) as any[]} isAdmin={isAdmin} />
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <PostFeed posts={(posts ?? []) as any[]} userId={user!.id} isAdmin={isAdmin} />
       </div>

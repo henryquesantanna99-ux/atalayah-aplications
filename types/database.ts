@@ -88,6 +88,7 @@ export interface Database {
           location: string | null
           is_online: boolean
           meet_link: string | null
+          google_calendar_event_id: string | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -105,6 +106,7 @@ export interface Database {
           location?: string | null
           is_online?: boolean
           meet_link?: string | null
+          google_calendar_event_id?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -121,6 +123,7 @@ export interface Database {
           location?: string | null
           is_online?: boolean
           meet_link?: string | null
+          google_calendar_event_id?: string | null
           updated_at?: string
         }
         Relationships: []

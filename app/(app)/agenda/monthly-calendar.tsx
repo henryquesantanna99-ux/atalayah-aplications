@@ -46,6 +46,7 @@ interface CalendarEvent {
   location?: string | null
   is_online?: boolean
   meet_link?: string | null
+  google_calendar_event_id?: string | null
 }
 
 interface MonthlyCalendarProps {

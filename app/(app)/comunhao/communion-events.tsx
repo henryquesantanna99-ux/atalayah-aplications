@@ -1,4 +1,5 @@
 import { CalendarDays, MapPin, Video } from 'lucide-react'
+import { CreateMeetButton } from './create-meet-button'
 
 interface CommunionEvent {
   id: string
@@ -18,6 +19,7 @@ interface CommunionEvent {
 
 interface CommunionEventsProps {
   events: CommunionEvent[]
+  isAdmin: boolean
 }
 
 function formatDate(dateStr: string) {
@@ -28,7 +30,7 @@ function formatDate(dateStr: string) {
   })
 }
 
-export function CommunionEvents({ events }: CommunionEventsProps) {
+export function CommunionEvents({ events, isAdmin }: CommunionEventsProps) {
   if (events.length === 0) {
     return null
   }
@@ -90,6 +92,9 @@ export function CommunionEvents({ events }: CommunionEventsProps) {
                   <Video className="w-4 h-4" aria-hidden="true" />
                   Entrar na reunião
                 </a>
+              )}
+              {isAdmin && !event.meet_link && (
+                <CreateMeetButton eventId={event.id} />
               )}
             </div>
           </article>
