@@ -59,7 +59,6 @@ const LAIA_SLIDES = [
 interface OnboardingWizardProps {
   userId: string
   initialName: string
-  avatarUrl: string
 }
 
 export function OnboardingWizard({

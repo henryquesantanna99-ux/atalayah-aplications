@@ -32,7 +32,6 @@ export default async function OnboardingPage() {
     <OnboardingWizard
       userId={user.id}
       initialName={profile?.full_name ?? user.user_metadata?.full_name ?? ''}
-      avatarUrl={profile?.avatar_url ?? user.user_metadata?.avatar_url ?? ''}
     />
   )
 }
