@@ -127,10 +127,18 @@ export function OnboardingWizard({
 
   async function handleFinish() {
     setSaving(true)
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ onboarding_completed: true })
       .eq('id', userId)
+
+    if (error) {
+      setSaving(false)
+      toast.error('Erro ao concluir onboarding. Tente novamente.')
+      return
+    }
+
+    router.replace('/onboarding')
     router.refresh()
   }
 
