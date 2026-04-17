@@ -12,10 +12,12 @@ const DEFAULT_STEMS = [
 ]
 
 interface YtdlResponse {
+  success?: boolean
   audio_url?: string
   url?: string
   file?: string
   downloadUrl?: string
+  error?: string
 }
 
 interface MusicGptResponse {
@@ -148,13 +150,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: jobError?.message ?? 'Could not create job.' }, { status: 500 })
   }
 
-  const ytdlBaseUrl = process.env.YTDL_SERVICE_URL!
+  const ytdlBaseUrl = process.env.YTDL_SERVICE_URL!.trim()
   const ytdlUrl = new URL('/audio', ytdlBaseUrl)
   ytdlUrl.searchParams.set('url', youtubeUrl)
 
   const ytdlResponse = await fetch(ytdlUrl, {
     headers: {
-      Authorization: `Bearer ${process.env.YTDL_SERVICE_TOKEN}`,
+      Authorization: `Bearer ${process.env.YTDL_SERVICE_TOKEN!.trim()}`,
       accept: 'application/json',
     },
   })
@@ -162,16 +164,26 @@ export async function POST(request: Request) {
   const audioUrl = ytdlJson ? extractAudioUrl(ytdlJson) : null
 
   if (!ytdlResponse.ok || !audioUrl) {
+    const errorMessage =
+      ytdlJson?.error ??
+      `Serviço de áudio retornou HTTP ${ytdlResponse.status}.`
+
+    console.error('YTDL audio preparation failed', {
+      status: ytdlResponse.status,
+      error: errorMessage,
+      setlistSongId: typedSetlistSong.id,
+    })
+
     await supabase
       .from('song_stem_jobs')
       .update({
         status: 'failed',
-        error_message: 'Não foi possível preparar o áudio do YouTube.',
+        error_message: errorMessage,
       })
       .eq('id', job.id)
 
     return NextResponse.json(
-      { error: 'Não foi possível preparar o áudio do YouTube.' },
+      { error: `Não foi possível preparar o áudio do YouTube: ${errorMessage}` },
       { status: 502 }
     )
   }

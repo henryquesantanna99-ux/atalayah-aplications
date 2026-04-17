@@ -5,7 +5,7 @@ import miniget from 'miniget'
 
 const app = express()
 const port = process.env.PORT || 3000
-const serviceToken = process.env.YTDL_SERVICE_TOKEN
+const serviceToken = process.env.YTDL_SERVICE_TOKEN?.trim()
 
 app.use(cors())
 
@@ -13,9 +13,11 @@ function isAuthorized(request) {
   if (!serviceToken) return false
 
   const authorization = request.get('authorization') || ''
-  const token = authorization.startsWith('Bearer ')
-    ? authorization.slice('Bearer '.length)
-    : request.get('x-ytdl-service-token')
+  const token = (
+    authorization.startsWith('Bearer ')
+      ? authorization.slice('Bearer '.length)
+      : request.get('x-ytdl-service-token')
+  )?.trim()
 
   return token === serviceToken
 }
@@ -28,7 +30,7 @@ function requireToken(request, response, next) {
 
   response.status(401).json({
     success: false,
-    error: 'Unauthorized',
+    error: serviceToken ? 'Unauthorized' : 'YTDL_SERVICE_TOKEN is not configured.',
   })
 }
 
