@@ -566,6 +566,25 @@ export type LaiaMessageInsert = Database['public']['Tables']['laia_messages']['I
 
 export type LaiaUsage = Database['public']['Tables']['laia_usage']['Row']
 
+// Song variation (catalog entry)
+export interface SongVariation {
+  id: string
+  song_id: string
+  artist: string | null
+  key_note: string | null
+  moment: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+  soloist_id: string | null
+  version: string | null
+  youtube_url: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export interface SongVariationWithDetails extends SongVariation {
+  songs: Pick<Song, 'id' | 'title' | 'artist' | 'youtube_url'>
+  profiles: Pick<Profile, 'id' | 'full_name'> | null
+}
+
 // Extended types with joined data
 export type EventWithMembers = Event & {
   event_members: (EventMember & { profiles: Profile })[]
