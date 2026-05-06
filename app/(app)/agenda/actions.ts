@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { canEdit } from '@/lib/permissions'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
@@ -19,23 +20,16 @@ interface EventInput {
   meet_link?: string | null
 }
 
-async function requireAdmin() {
+async function requireEditor() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'admin') throw new Error('Forbidden')
+  if (!canEdit(user.email)) throw new Error('Forbidden')
   return { supabase, user }
 }
 
 export async function createEvent(input: EventInput) {
-  const { supabase, user } = await requireAdmin()
+  const { supabase, user } = await requireEditor()
   const { error } = await supabase.from('events').insert({
     ...input,
     created_by: user.id,
@@ -51,7 +45,7 @@ export async function updateEvent(
   eventId: string,
   input: EventInput
 ) {
-  const { supabase } = await requireAdmin()
+  const { supabase } = await requireEditor()
   const { error } = await supabase
     .from('events')
     .update(input)
@@ -64,7 +58,7 @@ export async function updateEvent(
 }
 
 export async function deleteEvent(eventId: string) {
-  const { supabase } = await requireAdmin()
+  const { supabase } = await requireEditor()
   const { error } = await supabase.from('events').delete().eq('id', eventId)
 
   if (error) throw new Error(error.message)
@@ -78,7 +72,7 @@ export async function assignEventMember(input: {
   profileId: string
   instrument: string | null
 }) {
-  const { supabase } = await requireAdmin()
+  const { supabase } = await requireEditor()
   const { error } = await supabase.from('event_members').upsert(
     {
       event_id: input.eventId,
@@ -93,7 +87,7 @@ export async function assignEventMember(input: {
 }
 
 export async function removeEventMember(eventMemberId: string) {
-  const { supabase } = await requireAdmin()
+  const { supabase } = await requireEditor()
   const { error } = await supabase
     .from('event_members')
     .delete()
@@ -113,12 +107,15 @@ export async function createScale(input: {
   songs: {
     songId?: string | null
     songTitle: string
+    artist?: string | null
     soloistId: string | null
     keyNote: string | null
+    moment?: string | null
+    version?: string | null
     referenceLink: string | null
   }[]
 }) {
-  const { supabase, user } = await requireAdmin()
+  const { supabase, user } = await requireEditor()
 
   let eventId = input.eventId
 
@@ -161,8 +158,11 @@ export async function createScale(input: {
           song_id: song.songId ?? null,
           order_index: index,
           song_title: song.songTitle.trim(),
+          artist: song.artist ?? null,
           soloist_id: song.soloistId,
           key_note: song.keyNote,
+          moment: (song.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null) ?? null,
+          version: song.version ?? null,
           reference_link: song.referenceLink,
         }))
       )
