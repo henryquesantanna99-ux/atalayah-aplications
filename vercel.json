@@ -7,8 +7,7 @@
     },
     "ytdl": {
       "framework": "express",
-      "installCommand": "npm install",
-      "startCommand": "npm start"
+      "installCommand": "npm install"
     }
   }
 }
