@@ -1,0 +1,18 @@
+{
+  "experimentalServices": {
+    "frontend": {
+      "src": "/",
+      "framework": "nextjs",
+      "buildCommand": "npm run build",
+      "installCommand": "npm install",
+      "outputDirectory": ".next"
+    },
+    "ytdl": {
+      "src": "services/ytdl",
+      "framework": "express",
+      "installCommand": "npm install",
+      "buildCommand": "echo 'no build'",
+      "startCommand": "npm start"
+    }
+  }
+}
