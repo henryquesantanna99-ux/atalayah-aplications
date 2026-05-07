@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { createEvent, updateEvent, createScale } from './actions'
+import { updateEvent, createScale } from './actions'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
