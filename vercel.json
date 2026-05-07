@@ -3,8 +3,7 @@
     "frontend": {
       "framework": "nextjs",
       "buildCommand": "npm run build",
-      "installCommand": "npm install",
-      "outputDirectory": ".next"
+      "installCommand": "npm install"
     },
     "ytdl": {
       "framework": "express",
