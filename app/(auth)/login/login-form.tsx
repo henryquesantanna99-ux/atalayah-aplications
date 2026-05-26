@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
 export function LoginForm() {
-  const [loading, setLoading] = useState(false)
+  const [emailLoading, setEmailLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [isRegisterMode, setIsRegisterMode] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -13,26 +14,28 @@ export function LoginForm() {
   const supabase = createClient()
 
   async function handleGoogleLogin() {
-    setLoading(true)
+    setGoogleLoading(true)
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
+
     if (error) {
       toast.error('Erro ao iniciar login com Google. Tente novamente.')
-      setLoading(false)
+      setGoogleLoading(false)
     }
   }
 
   async function handleEmailAuth(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    setLoading(true)
+    setEmailLoading(true)
 
     if (!email.trim() || !password.trim()) {
       toast.error('Informe e-mail e senha.')
-      setLoading(false)
+      setEmailLoading(false)
       return
     }
 
@@ -49,7 +52,7 @@ export function LoginForm() {
 
       if (error) {
         toast.error(error.message)
-        setLoading(false)
+        setEmailLoading(false)
         return
       }
 
@@ -63,12 +66,14 @@ export function LoginForm() {
 
     if (loginError) {
       toast.error(loginError.message)
-      setLoading(false)
+      setEmailLoading(false)
       return
     }
 
     window.location.href = '/dashboard'
   }
+
+  const anyLoading = emailLoading || googleLoading
 
   return (
     <div className="bg-navy-900 border border-white/[0.06] rounded-modal p-8 space-y-6">
@@ -89,6 +94,7 @@ export function LoginForm() {
             className="w-full px-3 py-2 rounded-card bg-black/40 border border-white/10 text-white text-sm placeholder:text-[#64748B] focus:outline-none focus:border-brand/60"
           />
         )}
+
         <input
           type="email"
           value={email}
@@ -97,6 +103,7 @@ export function LoginForm() {
           autoComplete="email"
           className="w-full px-3 py-2 rounded-card bg-black/40 border border-white/10 text-white text-sm placeholder:text-[#64748B] focus:outline-none focus:border-brand/60"
         />
+
         <input
           type="password"
           value={password}
@@ -105,12 +112,17 @@ export function LoginForm() {
           autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
           className="w-full px-3 py-2 rounded-card bg-black/40 border border-white/10 text-white text-sm placeholder:text-[#64748B] focus:outline-none focus:border-brand/60"
         />
+
         <button
           type="submit"
-          disabled={loading}
+          disabled={anyLoading}
           className="w-full px-4 py-3 rounded-card bg-brand text-black font-semibold text-sm transition-all duration-200 hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {loading ? 'Processando...' : isRegisterMode ? 'Criar conta e entrar' : 'Entrar com e-mail'}
+          {emailLoading
+            ? 'Processando...'
+            : isRegisterMode
+              ? 'Criar conta e entrar'
+              : 'Entrar com e-mail'}
         </button>
       </form>
 
@@ -121,12 +133,13 @@ export function LoginForm() {
       </div>
 
       <button
+        type="button"
         onClick={handleGoogleLogin}
-        disabled={loading}
+        disabled={anyLoading}
         aria-label="Entrar com Google"
         className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-card bg-white text-gray-900 font-medium text-sm transition-all duration-200 hover:bg-gray-100 disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        {loading ? (
+        {googleLoading ? (
           <div className="w-5 h-5 border-2 border-gray-400 border-t-gray-900 rounded-full animate-spin" />
         ) : (
           <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">
@@ -148,13 +161,13 @@ export function LoginForm() {
             />
           </svg>
         )}
-        {loading ? 'Redirecionando...' : 'Entrar com Google'}
+        {googleLoading ? 'Redirecionando...' : 'Entrar com Google'}
       </button>
 
       <button
         type="button"
         onClick={() => setIsRegisterMode((current) => !current)}
-        disabled={loading}
+        disabled={anyLoading}
         className="w-full text-xs text-[#94A3B8] hover:text-white transition-colors disabled:opacity-60"
       >
         {isRegisterMode
