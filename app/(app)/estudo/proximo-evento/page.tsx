@@ -4,6 +4,16 @@ import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/layout/page-header'
 import { MomentBadge } from '@/components/ui/moment-badge'
 
+interface NextEventSong {
+  id: string
+  song_title: string
+  artist: string | null
+  key_note: string | null
+  moment: string | null
+  profiles: { full_name: string | null } | null
+  song_stems: Array<{ id: string; stem_type: string; audio_url: string }> | null
+}
+
 export default async function ProximoEventoPage() {
   const supabase = await createClient()
 
@@ -56,7 +66,7 @@ export default async function ProximoEventoPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {(setlistSongs ?? []).map((song: any, index: number) => (
+            {((setlistSongs ?? []) as NextEventSong[]).map((song, index: number) => (
               <Link
                 key={song.id}
                 href={`/estudo/proximo-evento/${song.id}`}
