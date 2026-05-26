@@ -371,6 +371,45 @@ export interface Database {
         }
         Relationships: []
       }
+
+      song_variations: {
+        Row: {
+          id: string
+          song_id: string
+          artist: string | null
+          key_note: string | null
+          moment: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          soloist_id: string | null
+          version: string | null
+          youtube_url: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          song_id: string
+          artist?: string | null
+          key_note?: string | null
+          moment?: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          soloist_id?: string | null
+          version?: string | null
+          youtube_url?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          song_id?: string
+          artist?: string | null
+          key_note?: string | null
+          moment?: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          soloist_id?: string | null
+          version?: string | null
+          youtube_url?: string | null
+          created_by?: string | null
+        }
+        Relationships: []
+      }
+
       schedules: {
         Row: {
           id: string
@@ -554,6 +593,10 @@ export type SongStemJob = Database['public']['Tables']['song_stem_jobs']['Row']
 export type SongStem = Database['public']['Tables']['song_stems']['Row']
 export type SongChord = Database['public']['Tables']['song_chords']['Row']
 
+export type SongVariation = Database['public']['Tables']['song_variations']['Row']
+export type SongVariationInsert = Database['public']['Tables']['song_variations']['Insert']
+export type SongVariationUpdate = Database['public']['Tables']['song_variations']['Update']
+
 export type CommunionPost = Database['public']['Tables']['communion_posts']['Row']
 export type CommunionPostInsert = Database['public']['Tables']['communion_posts']['Insert']
 
@@ -565,20 +608,6 @@ export type LaiaMessage = Database['public']['Tables']['laia_messages']['Row']
 export type LaiaMessageInsert = Database['public']['Tables']['laia_messages']['Insert']
 
 export type LaiaUsage = Database['public']['Tables']['laia_usage']['Row']
-
-// Song variation (catalog entry)
-export interface SongVariation {
-  id: string
-  song_id: string
-  artist: string | null
-  key_note: string | null
-  moment: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
-  soloist_id: string | null
-  version: string | null
-  youtube_url: string | null
-  created_by: string | null
-  created_at: string
-}
 
 export interface SongVariationWithDetails extends SongVariation {
   songs: Pick<Song, 'id' | 'title' | 'artist' | 'youtube_url'>
