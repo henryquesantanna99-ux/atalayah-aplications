@@ -64,7 +64,7 @@ export function LoginForm() {
 
     try {
       const normalizedEmail = email.trim().toLowerCase()
-      const normalizedPassword = password.trim()
+      const normalizedPassword = password
 
       if (!normalizedEmail || !normalizedPassword) {
         toast.error('Informe e-mail e senha.')
