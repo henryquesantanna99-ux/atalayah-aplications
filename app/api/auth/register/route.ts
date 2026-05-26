@@ -28,7 +28,7 @@ export async function POST(request: Request) {
 
   if (!supabase) {
     return NextResponse.json(
-      { error: 'Missing server envs', details: missing },
+      { success: false, error: 'Missing server envs', details: missing },
       { status: 428 }
     )
   }
@@ -37,7 +37,10 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as RegisterPayload
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return NextResponse.json(
+      { success: false, error: 'Invalid JSON body' },
+      { status: 400 }
+    )
   }
 
   const email = body.email?.trim().toLowerCase()
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
 
   if (!email || !password) {
     return NextResponse.json(
-      { error: 'Email and password are required.' },
+      { success: false, error: 'Email and password are required.' },
       { status: 400 }
     )
   }
@@ -60,9 +63,27 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json(
-      { error: 'createUser failed', details: error.message },
+      { success: false, error: 'createUser failed', details: error.message },
       { status: 400 }
     )
+  }
+
+  if (data.user?.id) {
+    const { error: updateError } = await supabase.auth.admin.updateUserById(data.user.id, {
+      email_confirm: true,
+    })
+
+    if (updateError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'User created, but email confirmation update failed',
+          details: updateError.message,
+          userId: data.user.id,
+        },
+        { status: 500 }
+      )
+    }
   }
 
   return NextResponse.json({
