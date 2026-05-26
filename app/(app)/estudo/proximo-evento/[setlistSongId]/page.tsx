@@ -13,6 +13,27 @@ interface Props {
   params: { setlistSongId: string }
 }
 
+interface SongStudyRecord {
+  id: string
+  song_title: string
+  artist: string | null
+  key_note: string | null
+  moment: string | null
+  version: string | null
+  reference_link: string | null
+  song_id: string | null
+  profiles: { full_name: string | null } | null
+  songs: {
+    id: string
+    title: string | null
+    artist: string | null
+    youtube_url: string | null
+    youtube_thumbnail: string | null
+  } | null
+  song_stems: Array<{ id: string; stem_type: string; audio_url: string }> | null
+  song_stem_jobs: Array<{ id: string; status: string; error_message: string | null; created_at: string }> | null
+}
+
 export default async function SongStudyPage({ params }: Props) {
   const supabase = await createClient()
 
@@ -30,14 +51,15 @@ export default async function SongStudyPage({ params }: Props) {
 
   if (!song) notFound()
 
-  const stems = (song.song_stems ?? []) as { id: string; stem_type: string; audio_url: string }[]
-  const latestJob = [...(song.song_stem_jobs ?? [])]
-    .sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))[0] as any
+  const songData = song as unknown as SongStudyRecord
+  const stems = songData.song_stems ?? []
+  const latestJob = [...(songData.song_stem_jobs ?? [])]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
 
-  const title = (song.songs as any)?.title ?? song.song_title
-  const artist = song.artist ?? (song.songs as any)?.artist
-  const youtubeUrl = song.reference_link ?? (song.songs as any)?.youtube_url
-  const thumbnail = (song.songs as any)?.youtube_thumbnail
+  const title = songData.songs?.title ?? songData.song_title ?? ''
+  const artist = songData.artist ?? songData.songs?.artist ?? null
+  const youtubeUrl = songData.reference_link ?? songData.songs?.youtube_url
+  const thumbnail = songData.songs?.youtube_thumbnail
 
   return (
     <main className="p-6 space-y-6 max-w-3xl mx-auto">
@@ -61,17 +83,17 @@ export default async function SongStudyPage({ params }: Props) {
           <h1 className="text-xl font-bold text-white leading-tight">{title}</h1>
           {artist && <p className="text-[#94A3B8] mt-0.5">{artist}</p>}
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            {song.key_note && (
+            {songData.key_note && (
               <span className="text-xs font-mono bg-white/[0.06] px-2 py-0.5 rounded text-[#94A3B8]">
-                {song.key_note}
+                {songData.key_note}
               </span>
             )}
-            <MomentBadge moment={(song as any).moment} />
-            {(song.profiles as any)?.full_name && (
-              <span className="text-xs text-[#64748B]">{(song.profiles as any).full_name}</span>
+            <MomentBadge moment={songData.moment} />
+            {songData.profiles?.full_name && (
+              <span className="text-xs text-[#64748B]">{songData.profiles.full_name}</span>
             )}
-            {song.version && (
-              <span className="text-xs text-[#64748B]">{song.version}</span>
+            {songData.version && (
+              <span className="text-xs text-[#64748B]">{songData.version}</span>
             )}
           </div>
         </div>
@@ -103,9 +125,9 @@ export default async function SongStudyPage({ params }: Props) {
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
-        <StemRequestButton setlistSongId={song.id} />
-        {song.song_id && (
-          <ChordSearchButton songId={song.song_id as string} title={title} artist={artist} />
+        <StemRequestButton setlistSongId={songData.id} />
+        {songData.song_id && (
+          <ChordSearchButton songId={songData.song_id} title={title} artist={artist} />
         )}
       </div>
 
@@ -164,7 +186,6 @@ function stemLabel(stem: string) {
     strings: 'Cordas',
     brass: 'Sopros',
     click: 'Click',
-    instrumental: 'Instrumental',
   }
   return labels[stem] ?? stem
 }
