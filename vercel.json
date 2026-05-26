@@ -3,7 +3,7 @@
     "frontend": {
       "framework": "nextjs",
       "buildCommand": "npm run build",
-      "installCommand": "npm install",
+      "installCommand": "installCommand": "npm install --prefix services/ytdl",
       "routePrefix": "/"
     },
     "ytdl": {
