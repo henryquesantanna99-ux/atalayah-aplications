@@ -53,6 +53,21 @@ interface CatalogSong {
   youtube_url: string | null
 }
 
+interface SongVariationRow {
+  id: string
+  song_id: string
+  songs: {
+    title: string | null
+    artist: string | null
+  } | null
+  artist: string | null
+  key_note: string | null
+  moment: EventSongDraft['moment'] | null
+  soloist_id: string | null
+  version: string | null
+  youtube_url: string | null
+}
+
 interface EventSongDraft {
   id: string
   catalogVariationId: string | null
@@ -160,8 +175,10 @@ export function EventFormModal({
       .from('song_variations')
       .select('id, song_id, songs(title, artist), key_note, moment, soloist_id, version, youtube_url')
       .order('created_at', { ascending: false })
+
+    const variations = (data ?? []) as SongVariationRow[]
     setCatalogSongs(
-      (data ?? []).map((v: any) => ({
+      variations.map((v) => ({
         id: v.id,
         song_id: v.song_id,
         title: v.songs?.title ?? '',
@@ -353,7 +370,6 @@ export function EventFormModal({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Step indicator (create mode only) */}
         {!isEditing && (
           <div className="flex items-center gap-2 mt-1 mb-2">
             {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
@@ -372,7 +388,6 @@ export function EventFormModal({
           </div>
         )}
 
-        {/* ── EDIT MODE: single-step form ── */}
         {isEditing && (
           <form onSubmit={handleSubmitEdit} className="space-y-4 mt-2">
             <Step1Fields form={form} profiles={profiles} onChange={handleChange} inputClass={inputClass} />
@@ -383,10 +398,8 @@ export function EventFormModal({
           </form>
         )}
 
-        {/* ── CREATE MODE: multi-step ── */}
         {!isEditing && (
           <div className="space-y-5 mt-2">
-            {/* Step 1: Dados do Evento */}
             {step === 1 && (
               <div className="space-y-4">
                 <Step1Fields form={form} profiles={profiles} onChange={handleChange} inputClass={inputClass} />
@@ -397,7 +410,6 @@ export function EventFormModal({
               </div>
             )}
 
-            {/* Step 2: Membros da Escala */}
             {step === 2 && (
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-white">Membros da Escala</h3>
@@ -439,7 +451,6 @@ export function EventFormModal({
               </div>
             )}
 
-            {/* Step 3: Músicas do Culto */}
             {step === 3 && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
@@ -469,7 +480,6 @@ export function EventFormModal({
                         </button>
                       </div>
 
-                      {/* Catalog search */}
                       <div className="relative">
                         <input
                           value={draft.catalogVariationId ? `${draft.title}${draft.artist ? ` — ${draft.artist}` : ''}` : songSearch}
@@ -504,7 +514,6 @@ export function EventFormModal({
                         )}
                       </div>
 
-                      {/* Song fields */}
                       <div className="grid grid-cols-2 gap-2">
                         <div className="col-span-2">
                           <label className="block text-[10px] text-[#64748B] mb-1">Título</label>
@@ -547,7 +556,6 @@ export function EventFormModal({
                         </div>
                       </div>
 
-                      {/* Ouvir Faixas placeholder */}
                       <button
                         type="button"
                         disabled
@@ -575,7 +583,6 @@ export function EventFormModal({
   )
 }
 
-// Extracted step 1 form fields component
 function Step1Fields({
   form,
   profiles,
