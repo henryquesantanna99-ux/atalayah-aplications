@@ -2,10 +2,15 @@ import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const MAX_DAILY_CALLS = 2
 
 export async function POST(request: Request) {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    return NextResponse.json({ error: 'OPENAI_API_KEY is not configured' }, { status: 500 })
+  }
+
+  const openai = new OpenAI({ apiKey })
   const supabase = await createClient()
 
   // Verify auth
