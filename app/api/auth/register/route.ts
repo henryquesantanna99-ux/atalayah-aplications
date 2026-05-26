@@ -12,23 +12,34 @@ function createServiceClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!supabaseUrl || !serviceRoleKey) return null
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { client: null, missing: { supabaseUrl: !supabaseUrl, serviceRoleKey: !serviceRoleKey } }
+  }
 
-  return createClient<Database>(supabaseUrl, serviceRoleKey, {
+  const client = createClient<Database>(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   })
+
+  return { client, missing: null }
 }
 
 export async function POST(request: Request) {
-  const supabase = createServiceClient()
+  const { client: supabase, missing } = createServiceClient()
+
   if (!supabase) {
     return NextResponse.json(
-      { error: 'SUPABASE_SERVICE_ROLE_KEY is not configured.' },
+      { error: 'Missing server envs', details: missing },
       { status: 428 }
     )
   }
 
-  const body = (await request.json()) as RegisterPayload
+  let body: RegisterPayload
+  try {
+    body = (await request.json()) as RegisterPayload
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
   const email = body.email?.trim().toLowerCase()
   const password = body.password ?? ''
   const fullName = body.fullName?.trim() || null
@@ -48,22 +59,15 @@ export async function POST(request: Request) {
   })
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json(
+      { error: 'createUser failed', details: error.message },
+      { status: 400 }
+    )
   }
 
-  // Reforço para garantir conta confirmada
-  if (data.user?.id) {
-    const { error: updateError } = await supabase.auth.admin.updateUserById(data.user.id, {
-      email_confirm: true,
-    })
-
-    if (updateError) {
-      return NextResponse.json(
-        { error: `User created, but failed to confirm email: ${updateError.message}` },
-        { status: 500 }
-      )
-    }
-  }
-
-  return NextResponse.json({ success: true })
+  return NextResponse.json({
+    success: true,
+    userId: data.user?.id ?? null,
+    email: data.user?.email ?? null,
+  })
 }
