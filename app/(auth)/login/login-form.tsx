@@ -39,15 +39,13 @@ export function LoginForm() {
   async function signInWithRetry(userEmail: string, userPassword: string) {
     let lastError: string | null = null
 
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       const { error } = await supabase.auth.signInWithPassword({
         email: userEmail,
         password: userPassword,
       })
 
-      if (!error) {
-        return null
-      }
+      if (!error) return null
 
       lastError = error.message
       await wait(700)
@@ -64,9 +62,9 @@ export function LoginForm() {
 
     try {
       const normalizedEmail = email.trim().toLowerCase()
-      const normalizedPassword = password
+      const rawPassword = password // não aplicar trim em senha
 
-      if (!normalizedEmail || !normalizedPassword) {
+      if (!normalizedEmail || !rawPassword) {
         toast.error('Informe e-mail e senha.')
         return
       }
@@ -77,30 +75,30 @@ export function LoginForm() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: normalizedEmail,
-            password: normalizedPassword,
+            password: rawPassword,
             fullName: fullName.trim() || null,
           }),
         })
 
-        let result: { error?: string } = {}
+        let result: { success?: boolean; error?: string; details?: string; userId?: string | null } = {}
         try {
           result = await response.json()
         } catch {
-          // resposta não-json
+          // ignore parse error
         }
 
-        if (!response.ok) {
-          toast.error(result.error ?? 'Erro ao criar conta.')
+        // gate rígido: só continua se backend confirmou sucesso
+        if (!response.ok || !result?.success) {
+          toast.error(result?.error || result?.details || 'Erro ao criar conta.')
           return
         }
 
         toast.success('Conta criada com sucesso. Entrando...')
       }
 
-      const loginError = await signInWithRetry(normalizedEmail, normalizedPassword)
-
+      const loginError = await signInWithRetry(normalizedEmail, rawPassword)
       if (loginError) {
-        toast.error(`Conta criada, mas o login falhou: ${loginError}`)
+        toast.error(`Falha no login: ${loginError}`)
         return
       }
 
