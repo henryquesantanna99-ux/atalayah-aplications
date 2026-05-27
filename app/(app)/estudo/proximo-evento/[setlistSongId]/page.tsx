@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/server'
 import { MomentBadge } from '@/components/ui/moment-badge'
 import { StemFaders } from '../../stem-faders'
 import { BpmControlClient } from '../../bpm-control-client'
-import { StemRequestButton } from '../../stem-request-button'
 import { ChordSearchButton } from '../../chord-search-button'
 import { Metronome } from '../../metronome'
 
@@ -125,7 +124,6 @@ export default async function SongStudyPage({ params }: Props) {
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
-        <StemRequestButton setlistSongId={songData.id} />
         {songData.song_id && (
           <ChordSearchButton songId={songData.song_id} title={title} artist={artist} />
         )}
