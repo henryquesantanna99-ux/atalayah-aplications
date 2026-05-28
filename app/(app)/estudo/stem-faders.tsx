@@ -19,6 +19,12 @@ const STEM_TYPES = [
   { key: 'other', label: 'Outras', color: 'from-gray-500 to-slate-300' },
 ] as const
 
+ codex/implementar-melhorias-no-modulo-de-estudo-j12qsb
+const STEM_LABELS: Record<string, string> = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.label]))
+const STEM_COLORS: Record<string, string> = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.color]))
+const STEM_ORDER: Record<string, number> = Object.fromEntries(STEM_TYPES.map((stem, index) => [stem.key, index]))
+const FALLBACK_STEM_ORDER = 99
+
 codex/implementar-melhorias-no-modulo-de-estudo-xvov4z
 const STEM_LABELS: Record<string, string> = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.label]))
 const STEM_COLORS: Record<string, string> = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.color]))
@@ -27,6 +33,7 @@ const STEM_ORDER: Record<string, number> = Object.fromEntries(STEM_TYPES.map((st
 const STEM_LABELS = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.label]))
 const STEM_COLORS = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.color]))
 main
+ main
 
 interface Stem {
   id: string
@@ -48,6 +55,10 @@ export function StemFaders({ stems }: StemFadersProps) {
   const [soloed, setSoloed] = useState<Record<string, boolean>>({})
 
   const orderedStems = useMemo(() => {
+ codex/implementar-melhorias-no-modulo-de-estudo-j12qsb
+    return [...stems].sort((a, b) => {
+      const byType = getStemOrder(a.stem_type) - getStemOrder(b.stem_type)
+
  codex/implementar-melhorias-no-modulo-de-estudo-xvov4z
     return [...stems].sort((a, b) => {
       const byType = (STEM_ORDER[a.stem_type] ?? 99) - (STEM_ORDER[b.stem_type] ?? 99)
@@ -55,6 +66,7 @@ export function StemFaders({ stems }: StemFadersProps) {
     const order = new Map(STEM_TYPES.map((stem, index) => [stem.key, index]))
     return [...stems].sort((a, b) => {
       const byType = (order.get(a.stem_type) ?? 99) - (order.get(b.stem_type) ?? 99)
+ main
  main
       if (byType !== 0) return byType
       return displayName(a).localeCompare(displayName(b), 'pt-BR')
@@ -119,6 +131,7 @@ export function StemFaders({ stems }: StemFadersProps) {
   function toggleSolo(stemId: string) {
     setSoloed((current) => ({ ...current, [stemId]: !current[stemId] }))
   }
+ codex/implementar-melhorias-no-modulo-de-estudo-j12qsb
 
   function resetMixer() {
     setPlaybackRate(1)
@@ -127,6 +140,16 @@ export function StemFaders({ stems }: StemFadersProps) {
     setSoloed({})
   }
 
+
+
+  function resetMixer() {
+    setPlaybackRate(1)
+    setVolumes({})
+    setMuted({})
+    setSoloed({})
+  }
+
+ main
   if (stems.length === 0) {
     return (
       <div className="rounded-[2rem] border border-white/[0.08] bg-gradient-to-br from-slate-950 via-navy-900 to-slate-900 p-6 text-center shadow-2xl">
@@ -276,6 +299,13 @@ export function StemFaders({ stems }: StemFadersProps) {
   )
 }
 
+ codex/implementar-melhorias-no-modulo-de-estudo-j12qsb
+function getStemOrder(stemType: string) {
+  return STEM_ORDER[stemType] ?? FALLBACK_STEM_ORDER
+}
+
+
+ main
 function effectiveVolume(volume: number, isMuted: boolean, isSolo: boolean, hasSolo: boolean) {
   if (isMuted) return 0
   if (hasSolo && !isSolo) return 0
