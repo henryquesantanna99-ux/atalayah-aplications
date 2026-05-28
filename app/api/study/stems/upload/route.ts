@@ -39,11 +39,14 @@ export async function POST(request: Request) {
 
   const formData = await request.formData()
   const setlistSongId = String(formData.get('setlistSongId') ?? '')
+  const songId = String(formData.get('songId') ?? '')
   const files = formData.getAll('files').filter((file): file is File => file instanceof File)
 
-  if (!setlistSongId || files.length === 0) {
-    return NextResponse.json({ error: 'setlistSongId and files are required.' }, { status: 400 })
+  if ((!setlistSongId && !songId) || files.length === 0) {
+    return NextResponse.json({ error: 'setlistSongId or songId and files are required.' }, { status: 400 })
   }
+
+  const ownerId = setlistSongId || songId
 
   const uploads: Array<{ stem_type: string; audio_url: string; storage_path: string; original_file_name: string }> = []
 
@@ -55,7 +58,7 @@ export async function POST(request: Request) {
     if (!AUDIO_EXTENSIONS.some((ext) => fileName.endsWith(ext))) continue
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const path = `${setlistSongId}/${Date.now()}-${index}-${safeName}`
+    const path = `${ownerId}/${Date.now()}-${index}-${safeName}`
 
     const { error: uploadError } = await supabase.storage
       .from('song-stems')
@@ -80,7 +83,11 @@ export async function POST(request: Request) {
   }
 
   const { error: insertError } = await supabase.from('song_stems').insert(
-    uploads.map((item) => ({ ...item, setlist_song_id: setlistSongId }))
+    uploads.map((item) => ({
+      ...item,
+      setlist_song_id: setlistSongId || null,
+      song_id: songId || null,
+    }))
   )
 
   if (insertError) {
