@@ -83,7 +83,12 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
     const data = new FormData()
     data.append('setlistSongId', setlistSongId)
     multitrackFiles.forEach((file) => {
+ codex/implementar-melhorias-no-modulo-de-estudo-xvov4z
       data.append('files', file, getRelativeFilePath(file))
+
+      const relativePath = 'webkitRelativePath' in file ? String((file as File & { webkitRelativePath?: string }).webkitRelativePath) : file.name
+      data.append('files', file, relativePath || file.name)
+ main
     })
 
     const response = await fetch('/api/study/stems/upload', { method: 'POST', body: data })
@@ -424,7 +429,11 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
                   <div className="max-h-24 space-y-1 overflow-y-auto pr-1">
                     {multitrackFiles.slice(0, 8).map((file) => (
                       <p key={`${file.name}-${file.size}`} className="truncate text-[11px] text-[#94A3B8]">
+ codex/implementar-melhorias-no-modulo-de-estudo-xvov4z
                         {getRelativeFilePath(file)}
+
+                        {'webkitRelativePath' in file && (file as File & { webkitRelativePath?: string }).webkitRelativePath ? String((file as File & { webkitRelativePath?: string }).webkitRelativePath) : file.name}
+ main
                       </p>
                     ))}
                     {multitrackFiles.length > 8 && (

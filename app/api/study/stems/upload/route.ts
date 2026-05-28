@@ -47,8 +47,12 @@ export async function POST(request: Request) {
 
   const uploads: Array<{ stem_type: string; audio_url: string; storage_path: string; original_file_name: string }> = []
 
+ codex/implementar-melhorias-no-modulo-de-estudo-xvov4z
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index]
+
+  for (const [index, file] of files.entries()) {
+ main
     const fileName = file.name.toLowerCase()
     if (!AUDIO_EXTENSIONS.some((ext) => fileName.endsWith(ext))) continue
 
