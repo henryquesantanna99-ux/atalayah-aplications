@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
+import { buildStemStoragePath, detectStemType, isAudioFileName } from '@/lib/stem-utils'
 import { toast } from 'sonner'
 
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
@@ -73,7 +74,7 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
   }
 
   function handleMultitrackFolderChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []).filter((file) => file.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|flac|ogg|aiff?|wma)$/i.test(file.name))
+    const files = Array.from(e.target.files ?? []).filter((file) => file.type.startsWith('audio/') || isAudioFileName(file.name))
     setMultitrackFiles(files)
     if (files.length > 0) {
       toast.success(`${files.length} faixa(s) de áudio detectada(s) na pasta.`)
@@ -83,17 +84,37 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
   async function uploadMultitracks(setlistSongId: string) {
     if (multitrackFiles.length === 0) return
 
-    const data = new FormData()
-    data.append('setlistSongId', setlistSongId)
-    multitrackFiles.forEach((file) => {
-      data.append('files', file, getRelativeFilePath(file))
-    })
+    const uploads: Array<{ stem_type: string; audio_url: string; storage_path: string; original_file_name: string; setlist_song_id: string }> = []
 
-    const response = await fetch('/api/study/stems/upload', { method: 'POST', body: data })
-    const result = await response.json()
+    for (let index = 0; index < multitrackFiles.length; index += 1) {
+      const file = multitrackFiles[index]
+      if (!file) continue
 
-    if (!response.ok) throw new Error(result.error ?? 'Erro ao enviar multitracks.')
-    toast.success(`${result.uploaded} faixa(s) de multitrack adicionada(s).`)
+      const relativePath = getRelativeFilePath(file)
+      const storagePath = buildStemStoragePath(setlistSongId, index, relativePath)
+      const { error: uploadError } = await supabase.storage
+        .from('song-stems')
+        .upload(storagePath, file, { upsert: false, contentType: file.type || undefined })
+
+      if (uploadError) throw new Error(uploadError.message)
+
+      const { data } = supabase.storage.from('song-stems').getPublicUrl(storagePath)
+
+      uploads.push({
+        setlist_song_id: setlistSongId,
+        stem_type: detectStemType(relativePath),
+        audio_url: data.publicUrl,
+        storage_path: storagePath,
+        original_file_name: relativePath,
+      })
+    }
+
+    if (uploads.length === 0) throw new Error('Nenhum áudio válido para upload.')
+
+    const { error: insertError } = await supabase.from('song_stems').insert(uploads)
+    if (insertError) throw new Error(insertError.message)
+
+    toast.success(`${uploads.length} faixa(s) de multitrack adicionada(s).`)
   }
 
   async function handleYoutubeSearch(event: React.FormEvent) {

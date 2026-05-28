@@ -29,25 +29,14 @@ CREATE POLICY "songs_editor_update" ON songs
     )
   );
 
--- Bucket used by /api/study/stems/upload. Public URLs are stored in song_stems.
+-- Bucket used by direct Supabase Storage uploads. Public URLs are stored in song_stems.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'song-stems',
   'song-stems',
   TRUE,
   104857600,
-  ARRAY[
-    'audio/mpeg',
-    'audio/wav',
-    'audio/x-wav',
-    'audio/mp4',
-    'audio/aac',
-    'audio/flac',
-    'audio/ogg',
-    'audio/aiff',
-    'audio/x-aiff',
-    'audio/x-ms-wma'
-  ]
+  NULL
 )
 ON CONFLICT (id) DO UPDATE SET
   public = EXCLUDED.public,
