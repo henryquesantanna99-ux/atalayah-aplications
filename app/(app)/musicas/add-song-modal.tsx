@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { PlayCircle, Plus, Search } from 'lucide-react'
+import { FolderUp, PlayCircle, Plus, Search, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,7 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
   const [searchingYoutube, setSearchingYoutube] = useState(false)
   const [youtubeQuery, setYoutubeQuery] = useState('')
   const [youtubeResults, setYoutubeResults] = useState<YouTubeResult[]>([])
+  const [multitrackFiles, setMultitrackFiles] = useState<File[]>([])
   const [form, setForm] = useState({
     song_title: '',
     artist: '',
@@ -62,6 +63,31 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
+  }
+
+  function handleMultitrackFolderChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).filter((file) => file.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|flac|ogg|aiff?|wma)$/i.test(file.name))
+    setMultitrackFiles(files)
+    if (files.length > 0) {
+      toast.success(`${files.length} faixa(s) de áudio detectada(s) na pasta.`)
+    }
+  }
+
+  async function uploadMultitracks(setlistSongId: string) {
+    if (multitrackFiles.length === 0) return
+
+    const data = new FormData()
+    data.append('setlistSongId', setlistSongId)
+    multitrackFiles.forEach((file) => {
+      const relativePath = 'webkitRelativePath' in file ? String((file as File & { webkitRelativePath?: string }).webkitRelativePath) : file.name
+      data.append('files', file, relativePath || file.name)
+    })
+
+    const response = await fetch('/api/study/stems/upload', { method: 'POST', body: data })
+    const result = await response.json()
+
+    if (!response.ok) throw new Error(result.error ?? 'Erro ao enviar multitracks.')
+    toast.success(`${result.uploaded} faixa(s) de multitrack adicionada(s).`)
   }
 
   async function handleYoutubeSearch(event: React.FormEvent) {
@@ -145,7 +171,7 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
       return
     }
 
-    const { error } = await supabase.from('setlist_songs').insert({
+    const { data: setlistSong, error } = await supabase.from('setlist_songs').insert({
       event_id: eventId,
       song_id: songId,
       song_title: form.song_title.trim(),
@@ -157,14 +183,23 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
       reference_link: form.reference_link || null,
       playlist_link: form.playlist_link || null,
       order_index: 9999,
-    })
+    }).select('id').single()
 
-    setSaving(false)
-    if (error) {
+    if (error || !setlistSong?.id) {
+      setSaving(false)
       toast.error('Erro ao adicionar música.')
       return
     }
 
+    try {
+      await uploadMultitracks(setlistSong.id)
+    } catch (uploadError) {
+      setSaving(false)
+      toast.error(uploadError instanceof Error ? uploadError.message : 'Música criada, mas não foi possível enviar as multitracks.')
+      return
+    }
+
+    setSaving(false)
     toast.success('Música adicionada!')
     setOpen(false)
     setForm({
@@ -174,6 +209,7 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
     })
     setYoutubeQuery('')
     setYoutubeResults([])
+    setMultitrackFiles([])
     router.refresh()
   }
 
@@ -346,6 +382,54 @@ export function AddSongModal({ eventId, profiles }: AddSongModalProps) {
                 placeholder="https://youtube.com/..."
                 className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand"
               />
+            </div>
+
+            <div className="col-span-2 rounded-card border border-dashed border-brand/30 bg-brand/10 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-white">Pasta de multitracks</p>
+                  <p className="mt-1 text-xs text-[#94A3B8]">
+                    Selecione uma pasta com mp3, wav, m4a e outros áudios. As faixas serão categorizadas por instrumento automaticamente.
+                  </p>
+                </div>
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-card bg-white/[0.08] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/[0.12]">
+                  <FolderUp className="h-4 w-4" aria-hidden="true" />
+                  Adicionar pasta
+                  <input
+                    type="file"
+                    multiple
+                    accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.aiff,.aif,.wma"
+                    onChange={handleMultitrackFolderChange}
+                    className="sr-only"
+                    {...{ webkitdirectory: '', directory: '' }}
+                  />
+                </label>
+              </div>
+              {multitrackFiles.length > 0 && (
+                <div className="mt-3 rounded-card border border-white/[0.08] bg-navy-900/70 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-emerald-300">{multitrackFiles.length} arquivo(s) pronto(s) para envio</span>
+                    <button
+                      type="button"
+                      onClick={() => setMultitrackFiles([])}
+                      className="inline-flex items-center gap-1 text-xs text-[#94A3B8] hover:text-white"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Limpar
+                    </button>
+                  </div>
+                  <div className="max-h-24 space-y-1 overflow-y-auto pr-1">
+                    {multitrackFiles.slice(0, 8).map((file) => (
+                      <p key={`${file.name}-${file.size}`} className="truncate text-[11px] text-[#94A3B8]">
+                        {'webkitRelativePath' in file && (file as File & { webkitRelativePath?: string }).webkitRelativePath ? String((file as File & { webkitRelativePath?: string }).webkitRelativePath) : file.name}
+                      </p>
+                    ))}
+                    {multitrackFiles.length > 8 && (
+                      <p className="text-[11px] text-[#64748B]">+ {multitrackFiles.length - 8} arquivo(s)</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
