@@ -19,14 +19,10 @@ const STEM_TYPES = [
   { key: 'other', label: 'Outras', color: 'from-gray-500 to-slate-300' },
 ] as const
 
-codex/implementar-melhorias-no-modulo-de-estudo-xvov4z
 const STEM_LABELS: Record<string, string> = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.label]))
 const STEM_COLORS: Record<string, string> = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.color]))
 const STEM_ORDER: Record<string, number> = Object.fromEntries(STEM_TYPES.map((stem, index) => [stem.key, index]))
-
-const STEM_LABELS = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.label]))
-const STEM_COLORS = Object.fromEntries(STEM_TYPES.map((stem) => [stem.key, stem.color]))
-main
+const FALLBACK_STEM_ORDER = 99
 
 interface Stem {
   id: string
@@ -48,14 +44,8 @@ export function StemFaders({ stems }: StemFadersProps) {
   const [soloed, setSoloed] = useState<Record<string, boolean>>({})
 
   const orderedStems = useMemo(() => {
- codex/implementar-melhorias-no-modulo-de-estudo-xvov4z
     return [...stems].sort((a, b) => {
-      const byType = (STEM_ORDER[a.stem_type] ?? 99) - (STEM_ORDER[b.stem_type] ?? 99)
-
-    const order = new Map(STEM_TYPES.map((stem, index) => [stem.key, index]))
-    return [...stems].sort((a, b) => {
-      const byType = (order.get(a.stem_type) ?? 99) - (order.get(b.stem_type) ?? 99)
- main
+      const byType = getStemOrder(a.stem_type) - getStemOrder(b.stem_type)
       if (byType !== 0) return byType
       return displayName(a).localeCompare(displayName(b), 'pt-BR')
     })
@@ -274,6 +264,10 @@ export function StemFaders({ stems }: StemFadersProps) {
       </div>
     </div>
   )
+}
+
+function getStemOrder(stemType: string) {
+  return STEM_ORDER[stemType] ?? FALLBACK_STEM_ORDER
 }
 
 function effectiveVolume(volume: number, isMuted: boolean, isSolo: boolean, hasSolo: boolean) {
