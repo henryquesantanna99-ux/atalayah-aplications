@@ -4,8 +4,16 @@ import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/layout/page-header'
 import { MomentBadge } from '@/components/ui/moment-badge'
 
+interface Stem {
+  id: string
+  stem_type: string
+  audio_url: string
+  original_file_name: string | null
+}
+
 interface NextEventSong {
   id: string
+  song_id: string | null
   song_title: string
   artist: string | null
   key_note: string | null
@@ -29,13 +37,21 @@ export default async function ProximoEventoPage() {
     .limit(1)
     .single()
 
-  const { data: setlistSongs } = nextEvent
+  const { data: setlistSongsData } = nextEvent
     ? await supabase
         .from('setlist_songs')
         .select('id, song_title, artist, key_note, moment, soloist_id, version, reference_link, profiles(full_name), song_stems(id, stem_type, audio_url, original_file_name)')
         .eq('event_id', nextEvent.id)
         .order('order_index')
     : { data: [] }
+
+  const setlistSongs = ((setlistSongsData ?? []) as unknown as NextEventSong[])
+  const stemsBySetlistSong = await loadStemsForSongs(supabase, setlistSongs)
+
+  const songsWithStems = setlistSongs.map((song) => ({
+    ...song,
+    song_stems: stemsBySetlistSong.get(song.id) ?? [],
+  }))
 
   return (
     <>
@@ -58,7 +74,7 @@ export default async function ProximoEventoPage() {
             <p className="text-[#94A3B8] font-medium">Nenhum culto agendado</p>
             <p className="text-sm text-[#64748B] mt-1">Assim que um culto for criado na Agenda, as músicas aparecerão aqui.</p>
           </div>
-        ) : (setlistSongs ?? []).length === 0 ? (
+        ) : songsWithStems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center border border-white/[0.06] rounded-modal">
             <Music2 className="w-10 h-10 text-[#64748B] mb-3" />
             <p className="text-[#94A3B8] font-medium">Nenhuma música na escala</p>
@@ -134,6 +150,51 @@ export default async function ProximoEventoPage() {
       </main>
     </>
   )
+}
+
+async function loadStemsForSongs(supabase: Awaited<ReturnType<typeof createClient>>, songs: NextEventSong[]) {
+  const stemsBySetlistSong = new Map<string, Stem[]>()
+  if (songs.length === 0) return stemsBySetlistSong
+
+  const setlistIds = songs.map((song) => song.id)
+  const songIds = songs.map((song) => song.song_id).filter((id): id is string => Boolean(id))
+
+  const [setlistStemsResult, songStemsResult] = await Promise.all([
+    supabase
+      .from('song_stems')
+      .select('id, setlist_song_id, song_id, stem_type, audio_url, original_file_name')
+      .in('setlist_song_id', setlistIds),
+    songIds.length > 0
+      ? supabase
+          .from('song_stems')
+          .select('id, setlist_song_id, song_id, stem_type, audio_url, original_file_name')
+          .in('song_id', songIds)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const allStems = [...(setlistStemsResult.data ?? []), ...(songStemsResult.data ?? [])]
+  const seenBySetlistSong = new Map<string, Set<string>>()
+
+  for (const song of songs) {
+    const stemsForSong = allStems.filter((stem) => stem.setlist_song_id === song.id || (song.song_id && stem.song_id === song.song_id))
+    for (const stem of stemsForSong) {
+      const seen = seenBySetlistSong.get(song.id) ?? new Set<string>()
+      if (seen.has(stem.id)) continue
+      seen.add(stem.id)
+      seenBySetlistSong.set(song.id, seen)
+
+      const current = stemsBySetlistSong.get(song.id) ?? []
+      current.push({
+        id: stem.id,
+        stem_type: stem.stem_type,
+        audio_url: stem.audio_url,
+        original_file_name: stem.original_file_name,
+      })
+      stemsBySetlistSong.set(song.id, current)
+    }
+  }
+
+  return stemsBySetlistSong
 }
 
 function formatEventTitle(event: { title: string; date: string }) {

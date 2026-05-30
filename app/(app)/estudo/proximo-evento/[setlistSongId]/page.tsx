@@ -50,7 +50,7 @@ export default async function SongStudyPage({ params }: Props) {
   if (!song) notFound()
 
   const songData = song as unknown as SongStudyRecord
-  const stems = songData.song_stems ?? []
+  const stems = await loadStemsForSong(supabase, songData.id, songData.song_id)
   const latestJob = [...(songData.song_stem_jobs ?? [])]
     .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
 
