@@ -28,6 +28,7 @@ interface SongStudyRecord {
     youtube_url: string | null
     youtube_thumbnail: string | null
   } | null
+  song_stems: Array<{ id: string; stem_type: string; audio_url: string; original_file_name: string | null }> | null
   song_stem_jobs: Array<{ id: string; status: string; error_message: string | null; created_at: string }> | null
 }
 
@@ -40,6 +41,7 @@ export default async function SongStudyPage({ params }: Props) {
       id, song_title, artist, key_note, moment, version, reference_link, song_id,
       profiles(full_name),
       songs(id, title, artist, youtube_url, youtube_thumbnail),
+      song_stems(id, stem_type, audio_url, original_file_name),
       song_stem_jobs(id, status, error_message, created_at)
     `)
     .eq('id', params.setlistSongId)
@@ -151,27 +153,4 @@ function statusLabel(status: string) {
     failed: 'Erro',
   }
   return labels[status] ?? status
-}
-
-
-async function loadStemsForSong(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  setlistSongId: string,
-  songId: string | null
-) {
-  const [setlistStemsResult, songStemsResult] = await Promise.all([
-    supabase
-      .from('song_stems')
-      .select('id, stem_type, audio_url, original_file_name')
-      .eq('setlist_song_id', setlistSongId),
-    songId
-      ? supabase
-          .from('song_stems')
-          .select('id, stem_type, audio_url, original_file_name')
-          .eq('song_id', songId)
-      : Promise.resolve({ data: [] }),
-  ])
-
-  const stems = [...(setlistStemsResult.data ?? []), ...(songStemsResult.data ?? [])]
-  return Array.from(new Map(stems.map((stem) => [stem.id, stem])).values())
 }

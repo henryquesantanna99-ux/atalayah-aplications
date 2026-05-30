@@ -19,7 +19,7 @@ interface NextEventSong {
   key_note: string | null
   moment: string | null
   profiles: { full_name: string | null } | null
-  song_stems?: Stem[] | null
+  song_stems: Array<{ id: string; stem_type: string; audio_url: string; original_file_name: string | null }> | null
 }
 
 export default async function ProximoEventoPage() {
@@ -40,7 +40,7 @@ export default async function ProximoEventoPage() {
   const { data: setlistSongsData } = nextEvent
     ? await supabase
         .from('setlist_songs')
-        .select('id, song_id, song_title, artist, key_note, moment, soloist_id, version, reference_link, profiles(full_name)')
+        .select('id, song_title, artist, key_note, moment, soloist_id, version, reference_link, profiles(full_name), song_stems(id, stem_type, audio_url, original_file_name)')
         .eq('event_id', nextEvent.id)
         .order('order_index')
     : { data: [] }
@@ -82,7 +82,7 @@ export default async function ProximoEventoPage() {
           </div>
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
-            {songsWithStems.map((song, index: number) => {
+            {((setlistSongs ?? []) as NextEventSong[]).map((song, index: number) => {
               const stemCount = (song.song_stems ?? []).length
 
               return (
