@@ -37,7 +37,12 @@ interface SongStudyRecord {
     youtube_url: string | null
     youtube_thumbnail: string | null
   } | null
-  song_stem_jobs: Array<{ id: string; status: string; error_message: string | null; created_at: string }> | null
+  song_stem_jobs: Array<{
+    id: string
+    status: string
+    error_message: string | null
+    created_at: string
+  }> | null
 }
 
 export default async function SongStudyPage({ params }: Props) {
@@ -58,8 +63,10 @@ export default async function SongStudyPage({ params }: Props) {
 
   const songData = song as unknown as SongStudyRecord
   const stems = await loadStemsForSong(supabase, songData.id, songData.song_id)
-  const latestJob = [...(songData.song_stem_jobs ?? [])]
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+
+  const latestJob = [...(songData.song_stem_jobs ?? [])].sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  )[0]
 
   const title = songData.songs?.title ?? songData.song_title ?? ''
   const artist = songData.artist ?? songData.songs?.artist ?? null
@@ -81,35 +88,58 @@ export default async function SongStudyPage({ params }: Props) {
         <div className="grid gap-6 p-5 md:grid-cols-[180px_1fr] md:p-6">
           {thumbnail ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={thumbnail} alt="" className="h-32 w-full rounded-3xl bg-navy-800 object-cover md:h-full" />
+            <img
+              src={thumbnail}
+              alt=""
+              className="h-32 w-full rounded-3xl bg-navy-800 object-cover md:h-full"
+            />
           ) : (
             <div className="flex h-32 items-center justify-center rounded-3xl bg-white/[0.04] md:h-full">
               <span className="text-3xl">🎚️</span>
             </div>
           )}
+
           <div className="min-w-0">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/80">Estudo do próximo evento</p>
-                <h1 className="mt-2 text-3xl font-bold leading-tight text-white">{title}</h1>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/80">
+                  Estudo do próximo evento
+                </p>
+
+                <h1 className="mt-2 text-3xl font-bold leading-tight text-white">
+                  {title}
+                </h1>
+
                 {artist && <p className="mt-1 text-[#94A3B8]">{artist}</p>}
               </div>
+
               <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-center">
                 <p className="text-2xl font-bold text-white">{stemCount}</p>
-                <p className="text-[11px] uppercase tracking-wide text-[#94A3B8]">faixas</p>
+                <p className="text-[11px] uppercase tracking-wide text-[#94A3B8]">
+                  faixas
+                </p>
               </div>
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2">
               {songData.key_note && (
-                <span className="rounded-full bg-white/[0.08] px-3 py-1.5 font-mono text-xs text-cyan-100">Tom {songData.key_note}</span>
+                <span className="rounded-full bg-white/[0.08] px-3 py-1.5 font-mono text-xs text-cyan-100">
+                  Tom {songData.key_note}
+                </span>
               )}
+
               <MomentBadge moment={songData.moment} />
+
               {songData.profiles?.full_name && (
-                <span className="rounded-full bg-white/[0.04] px-3 py-1.5 text-xs text-[#94A3B8]">Solista: {songData.profiles.full_name}</span>
+                <span className="rounded-full bg-white/[0.04] px-3 py-1.5 text-xs text-[#94A3B8]">
+                  Solista: {songData.profiles.full_name}
+                </span>
               )}
+
               {songData.version && (
-                <span className="rounded-full bg-white/[0.04] px-3 py-1.5 text-xs text-[#94A3B8]">{songData.version}</span>
+                <span className="rounded-full bg-white/[0.04] px-3 py-1.5 text-xs text-[#94A3B8]">
+                  {songData.version}
+                </span>
               )}
             </div>
 
@@ -125,15 +155,28 @@ export default async function SongStudyPage({ params }: Props) {
                   Ver referência
                 </a>
               )}
+
               {songData.song_id && (
-                <ChordSearchButton songId={songData.song_id} title={title} artist={artist} />
+                <ChordSearchButton
+                  songId={songData.song_id}
+                  title={title}
+                  artist={artist}
+                />
               )}
             </div>
 
             {latestJob && (
               <p className="mt-4 text-xs text-[#94A3B8]">
                 Status das faixas:{' '}
-                <span className={`font-medium ${latestJob.status === 'completed' ? 'text-emerald-400' : latestJob.status === 'failed' ? 'text-red-400' : 'text-amber-400'}`}>
+                <span
+                  className={`font-medium ${
+                    latestJob.status === 'completed'
+                      ? 'text-emerald-400'
+                      : latestJob.status === 'failed'
+                        ? 'text-red-400'
+                        : 'text-amber-400'
+                  }`}
+                >
                   {statusLabel(latestJob.status)}
                 </span>
                 {latestJob.error_message && ` — ${latestJob.error_message}`}
@@ -159,14 +202,14 @@ function statusLabel(status: string) {
     completed: 'Pronto',
     failed: 'Erro',
   }
+
   return labels[status] ?? status
 }
-
 
 async function loadStemsForSong(
   supabase: SupabaseServerClient,
   setlistSongId: string,
-  songId: string | null
+  songId: string | null,
 ): Promise<StudyStem[]> {
   const [setlistStemsResult, songStemsResult] = await Promise.all([
     supabase
@@ -181,6 +224,10 @@ async function loadStemsForSong(
       : Promise.resolve({ data: [] }),
   ])
 
-  const stems = [...(setlistStemsResult.data ?? []), ...(songStemsResult.data ?? [])]
+  const stems = [
+    ...(setlistStemsResult.data ?? []),
+    ...(songStemsResult.data ?? []),
+  ]
+
   return Array.from(new Map(stems.map((stem) => [stem.id, stem])).values())
 }

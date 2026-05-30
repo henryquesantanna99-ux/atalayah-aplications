@@ -29,7 +29,8 @@ CREATE POLICY "songs_editor_update" ON songs
     )
   );
 
--- Bucket used by /api/study/stems/upload. Public URLs are stored in song_stems.
+-- Bucket used by /api/study/stems/upload and direct Supabase Storage uploads.
+-- Public URLs are stored in song_stems.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'song-stems',
@@ -47,12 +48,22 @@ DROP POLICY IF EXISTS "song_stems_storage_read_active" ON storage.objects;
 CREATE POLICY "song_stems_storage_read_active" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'song-stems'
-    AND EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'active')
+    AND EXISTS (
+      SELECT 1
+      FROM profiles p
+      WHERE p.id = auth.uid()
+        AND p.status = 'active'
+    )
   );
 
 DROP POLICY IF EXISTS "song_stems_storage_insert_active" ON storage.objects;
 CREATE POLICY "song_stems_storage_insert_active" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'song-stems'
-    AND EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'active')
+    AND EXISTS (
+      SELECT 1
+      FROM profiles p
+      WHERE p.id = auth.uid()
+        AND p.status = 'active'
+    )
   );
