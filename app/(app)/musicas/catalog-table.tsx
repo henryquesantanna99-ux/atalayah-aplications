@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Music, Trash2, ExternalLink } from 'lucide-react'
+import { Music, Trash2, ExternalLink, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { MomentBadge } from '@/components/ui/moment-badge'
 import type { SongVariationWithDetails } from '@/types/database'
@@ -85,7 +85,7 @@ export function CatalogTable({ variations, isEditor }: CatalogTableProps) {
                   <p className="text-sm font-semibold text-white">{v.songs?.title}</p>
                   <p className="text-xs text-[#94A3B8]">{v.artist ?? v.songs?.artist ?? '—'}</p>
                 </div>
-                {isEditor && (
+                {isEditor && !v.is_virtual && (
                   <button
                     onClick={() => handleDelete(v.id, v.songs?.title ?? '')}
                     disabled={deleting === v.id}
@@ -112,6 +112,12 @@ export function CatalogTable({ variations, isEditor }: CatalogTableProps) {
                   <ExternalLink className="w-3 h-3" />
                   Referência
                 </a>
+              )}
+              {(v.song_stems?.length ?? 0) > 0 && (
+                <p className="inline-flex items-center gap-1 text-xs text-emerald-300">
+                  <SlidersHorizontal className="h-3 w-3" />
+                  {v.song_stems?.length} faixa(s) multitrack
+                </p>
               )}
             </div>
           ))
@@ -199,17 +205,25 @@ export function CatalogTable({ variations, isEditor }: CatalogTableProps) {
                   </td>
                   <td className="py-3 px-4 text-sm text-[#94A3B8]">
                     {v.version ?? '—'}
+                    {(v.song_stems?.length ?? 0) > 0 && (
+                      <span className="mt-1 flex items-center gap-1 text-[11px] text-emerald-300">
+                        <SlidersHorizontal className="h-3 w-3" />
+                        {v.song_stems?.length} faixa(s)
+                      </span>
+                    )}
                   </td>
                   {isEditor && (
                     <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleDelete(v.id, v.songs?.title ?? '')}
-                        disabled={deleting === v.id}
-                        aria-label="Remover do catálogo"
-                        className="p-1.5 rounded text-[#64748B] hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-40"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {!v.is_virtual && (
+                        <button
+                          onClick={() => handleDelete(v.id, v.songs?.title ?? '')}
+                          disabled={deleting === v.id}
+                          aria-label="Remover do catálogo"
+                          className="p-1.5 rounded text-[#64748B] hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-40"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>

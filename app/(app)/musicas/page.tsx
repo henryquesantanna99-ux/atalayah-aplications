@@ -12,13 +12,21 @@ export default async function MusicasPage() {
 
   const isEditor = canEdit(user?.email)
 
-  // Fetch all song variations (catalog)
-  const { data: variationsData } = await supabase
-    .from('song_variations')
-    .select('*, songs(id, title, artist, youtube_url), profiles(id, full_name)')
-    .order('created_at', { ascending: false })
+  // Fetch the catalog variations and the base songs separately.
+  // Some songs may exist before a variation row is created; those are still
+  // rendered as catalog entries so the song never "disappears" from /musicas.
+  const [{ data: variationsData }, { data: songsData }] = await Promise.all([
+    supabase
+      .from('song_variations')
+      .select('*, songs(id, title, artist, youtube_url), profiles(id, full_name)')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('songs')
+      .select('id, title, artist, youtube_url, created_at, song_stems(id, stem_type, original_file_name)')
+      .order('created_at', { ascending: false }),
+  ])
 
-  const variations = (variationsData ?? []) as unknown as SongVariationWithDetails[]
+  const variations = buildCatalogRows(variationsData ?? [], songsData ?? [])
 
   // Profiles for the add modal soloist selector
   const { data: activeProfiles } = isEditor
@@ -49,4 +57,48 @@ export default async function MusicasPage() {
       <LaiaFloatingBadge tip="Sugestão de músicas para o culto" />
     </>
   )
+}
+
+
+function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): SongVariationWithDetails[] {
+  const songs = songsData as Array<{
+    id: string
+    title: string
+    artist: string | null
+    youtube_url: string | null
+    created_at: string
+    song_stems?: Array<{ id: string; stem_type: string; original_file_name: string | null }> | null
+  }>
+  const stemsBySongId = new Map(songs.map((song) => [song.id, song.song_stems ?? []]))
+  const variations = (variationsData as SongVariationWithDetails[]).map((variation) => ({
+    ...variation,
+    song_stems: stemsBySongId.get(variation.song_id) ?? [],
+  }))
+  const variationSongIds = new Set(variations.map((variation) => variation.song_id))
+
+  const songsWithoutVariation = songs
+    .filter((song) => !variationSongIds.has(song.id))
+    .map((song) => ({
+      id: `song:${song.id}`,
+      song_id: song.id,
+      artist: song.artist,
+      key_note: null,
+      moment: null,
+      soloist_id: null,
+      version: null,
+      youtube_url: song.youtube_url,
+      created_by: null,
+      created_at: song.created_at,
+      songs: {
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        youtube_url: song.youtube_url,
+      },
+      profiles: null,
+      song_stems: song.song_stems ?? [],
+      is_virtual: true,
+    })) satisfies SongVariationWithDetails[]
+
+  return [...variations, ...songsWithoutVariation]
 }
