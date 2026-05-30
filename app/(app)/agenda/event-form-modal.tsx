@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CalendarPlus, Headphones, Pencil, Plus, Trash2 } from 'lucide-react'
+import { CalendarPlus, Music2, Pencil, Plus, SlidersHorizontal, Trash2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,12 @@ export interface ProfileOption {
   }[]
 }
 
+interface CatalogStem {
+  id: string
+  stem_type: string
+  original_file_name: string | null
+}
+
 interface CatalogSong {
   id: string
   song_id: string
@@ -51,6 +57,7 @@ interface CatalogSong {
   soloist_id: string | null
   version: string | null
   youtube_url: string | null
+  stems: CatalogStem[]
 }
 
 interface SongVariationRow {
@@ -66,6 +73,15 @@ interface SongVariationRow {
   soloist_id: string | null
   version: string | null
   youtube_url: string | null
+}
+
+interface SongRow {
+  id: string
+  title: string
+  artist: string | null
+  youtube_url: string | null
+  created_at: string
+  song_stems?: CatalogStem[] | null
 }
 
 interface EventSongDraft {
@@ -146,7 +162,7 @@ export function EventFormModal({
   const [saving, setSaving] = useState(false)
   const [catalogSongs, setCatalogSongs] = useState<CatalogSong[]>([])
   const [catalogLoaded, setCatalogLoaded] = useState(false)
-  const [songSearch, setSongSearch] = useState('')
+  const [songSearchByDraft, setSongSearchByDraft] = useState<Record<string, string>>({})
 
   const [form, setForm] = useState(() => event
     ? {
@@ -171,25 +187,18 @@ export function EventFormModal({
 
   async function loadCatalog() {
     if (catalogLoaded) return
-    const { data } = await supabase
-      .from('song_variations')
-      .select('id, song_id, songs(title, artist), key_note, moment, soloist_id, version, youtube_url')
-      .order('created_at', { ascending: false })
+    const [{ data: variationsData }, { data: songsData }] = await Promise.all([
+      supabase
+        .from('song_variations')
+        .select('id, song_id, songs(title, artist), key_note, moment, soloist_id, version, youtube_url')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('songs')
+        .select('id, title, artist, youtube_url, created_at, song_stems(id, stem_type, original_file_name)')
+        .order('created_at', { ascending: false }),
+    ])
 
-    const variations = (data ?? []) as SongVariationRow[]
-    setCatalogSongs(
-      variations.map((v) => ({
-        id: v.id,
-        song_id: v.song_id,
-        title: v.songs?.title ?? '',
-        artist: v.artist ?? v.songs?.artist ?? '',
-        key_note: v.key_note,
-        moment: v.moment,
-        soloist_id: v.soloist_id,
-        version: v.version,
-        youtube_url: v.youtube_url,
-      }))
-    )
+    setCatalogSongs(buildCatalogSongs(variationsData ?? [], songsData ?? []))
     setCatalogLoaded(true)
   }
 
@@ -233,7 +242,11 @@ export function EventFormModal({
           }
         : s
     ))
-    setSongSearch('')
+    setSongSearchByDraft((current) => {
+      const next = { ...current }
+      delete next[draft.id]
+      return next
+    })
   }
 
   function updateSongField(id: string, field: keyof EventSongDraft, value: string) {
@@ -246,7 +259,7 @@ export function EventFormModal({
       setStep(1)
       setSelectedMembers({})
       setSongs([newSongDraft()])
-      setSongSearch('')
+      setSongSearchByDraft({})
       if (!isEditing) setForm(emptyForm)
     }
   }
@@ -338,13 +351,16 @@ export function EventFormModal({
     }
   }
 
-  const filteredCatalog = useMemo(() => {
-    const q = songSearch.toLowerCase()
+  function filteredCatalogForDraft(draftId: string) {
+    const q = (songSearchByDraft[draftId] ?? '').toLowerCase()
     if (!q) return catalogSongs.slice(0, 8)
     return catalogSongs.filter(
-      (s) => s.title.toLowerCase().includes(q) || s.artist?.toLowerCase().includes(q)
+      (song) =>
+        song.title.toLowerCase().includes(q) ||
+        (song.artist ?? '').toLowerCase().includes(q) ||
+        song.stems.some((stem) => stemDisplayName(stem).toLowerCase().includes(q))
     ).slice(0, 8)
-  }, [catalogSongs, songSearch])
+  }
 
   const inputClass = 'w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]'
   const inputSmClass = 'w-full px-2 py-1.5 rounded-card bg-navy-900 border border-white/[0.08] text-white text-xs focus:outline-none focus:border-brand placeholder-[#64748B]'
@@ -482,32 +498,45 @@ export function EventFormModal({
 
                       <div className="relative">
                         <input
-                          value={draft.catalogVariationId ? `${draft.title}${draft.artist ? ` — ${draft.artist}` : ''}` : songSearch}
+                          value={draft.catalogVariationId ? `${draft.title}${draft.artist ? ` — ${draft.artist}` : ''}` : songSearchByDraft[draft.id] ?? ''}
                           onChange={(e) => {
                             if (draft.catalogVariationId) {
                               setSongs((prev) => prev.map((s) => s.id === draft.id ? { ...newSongDraft(), id: s.id } : s))
                             }
-                            setSongSearch(e.target.value)
+                            setSongSearchByDraft((current) => ({ ...current, [draft.id]: e.target.value }))
                           }}
                           onFocus={() => { if (!catalogLoaded) loadCatalog() }}
                           placeholder="Buscar no catálogo ou digitar nova música..."
                           className={inputSmClass}
                         />
-                        {!draft.catalogVariationId && (filteredCatalog.length > 0 || songSearch) && (
+                        {!draft.catalogVariationId && (filteredCatalogForDraft(draft.id).length > 0 || songSearchByDraft[draft.id]) && (
                           <div className="absolute z-10 mt-1 w-full rounded-card border border-white/[0.08] bg-navy-900 shadow-xl overflow-hidden">
-                            {filteredCatalog.map((cat) => (
+                            {filteredCatalogForDraft(draft.id).map((cat) => (
                               <button
                                 key={cat.id}
                                 type="button"
                                 onClick={() => selectCatalogSong(draft, cat)}
                                 className="w-full text-left px-3 py-2 text-xs hover:bg-white/[0.05] transition-colors"
                               >
-                                <span className="text-white font-medium">{cat.title}</span>
-                                {cat.artist && <span className="text-[#64748B] ml-2">{cat.artist}</span>}
-                                {cat.key_note && <span className="ml-2 text-[#94A3B8] font-mono">{cat.key_note}</span>}
+                                <span className="flex items-center gap-2">
+                                  <Music2 className="h-3.5 w-3.5 text-cyan-300" />
+                                  <span className="text-white font-medium">{cat.title}</span>
+                                  {cat.artist && <span className="text-[#64748B]">{cat.artist}</span>}
+                                  {cat.key_note && <span className="text-[#94A3B8] font-mono">{cat.key_note}</span>}
+                                </span>
+                                {cat.stems.length > 0 && (
+                                  <span className="mt-1 flex flex-wrap gap-1 pl-5">
+                                    {cat.stems.slice(0, 5).map((stem) => (
+                                      <span key={stem.id} className="rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
+                                        {stemDisplayName(stem)}
+                                      </span>
+                                    ))}
+                                    {cat.stems.length > 5 && <span className="text-[10px] text-[#64748B]">+{cat.stems.length - 5}</span>}
+                                  </span>
+                                )}
                               </button>
                             ))}
-                            {songSearch && filteredCatalog.length === 0 && (
+                            {songSearchByDraft[draft.id] && filteredCatalogForDraft(draft.id).length === 0 && (
                               <div className="px-3 py-2 text-xs text-[#64748B]">Nenhuma música encontrada. Preencha os campos abaixo para criar.</div>
                             )}
                           </div>
@@ -556,16 +585,9 @@ export function EventFormModal({
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-card border border-white/[0.06] text-[#64748B] cursor-not-allowed opacity-50"
-                        title="Em desenvolvimento"
-                      >
-                        <Headphones className="w-3.5 h-3.5" />
-                        Ouvir Faixas
-                        <span className="text-[10px] bg-white/[0.06] px-1.5 py-0.5 rounded ml-1">em breve</span>
-                      </button>
+                      {draft.songId && (
+                        <SelectedSongStems stems={catalogSongs.find((song) => song.song_id === draft.songId)?.stems ?? []} />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -652,5 +674,76 @@ function Step1Fields({
         <textarea id="event-notes" name="notes" value={form.notes} onChange={onChange} rows={3} className={`${inputClass} resize-none`} />
       </div>
     </>
+  )
+}
+
+
+function buildCatalogSongs(variationsData: unknown[], songsData: unknown[]): CatalogSong[] {
+  const stemsBySongId = new Map<string, CatalogStem[]>()
+  const songs = songsData as SongRow[]
+
+  for (const song of songs) {
+    stemsBySongId.set(song.id, song.song_stems ?? [])
+  }
+
+  const variations = (variationsData as SongVariationRow[]).map((variation) => ({
+    id: variation.id,
+    song_id: variation.song_id,
+    title: variation.songs?.title ?? '',
+    artist: variation.artist ?? variation.songs?.artist ?? '',
+    key_note: variation.key_note,
+    moment: variation.moment,
+    soloist_id: variation.soloist_id,
+    version: variation.version,
+    youtube_url: variation.youtube_url,
+    stems: stemsBySongId.get(variation.song_id) ?? [],
+  }))
+
+  const variationSongIds = new Set(variations.map((variation) => variation.song_id))
+  const songsWithoutVariation = songs
+    .filter((song) => !variationSongIds.has(song.id))
+    .map((song) => ({
+      id: `song:${song.id}`,
+      song_id: song.id,
+      title: song.title,
+      artist: song.artist,
+      key_note: null,
+      moment: null,
+      soloist_id: null,
+      version: null,
+      youtube_url: song.youtube_url,
+      stems: song.song_stems ?? [],
+    }))
+
+  return [...variations, ...songsWithoutVariation]
+}
+
+function stemDisplayName(stem: CatalogStem) {
+  return stem.original_file_name?.split('/').pop()?.replace(/\.[^.]+$/, '') ?? stem.stem_type
+}
+
+function SelectedSongStems({ stems }: { stems: CatalogStem[] }) {
+  if (stems.length === 0) {
+    return (
+      <p className="rounded-card border border-white/[0.06] bg-navy-900 px-3 py-2 text-xs text-[#64748B]">
+        Esta música ainda não tem multitracks cadastradas.
+      </p>
+    )
+  }
+
+  return (
+    <div className="rounded-card border border-emerald-400/20 bg-emerald-400/10 p-3">
+      <p className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-300">
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+        {stems.length} faixa(s) virão junto com esta música
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {stems.map((stem) => (
+          <span key={stem.id} className="rounded-full bg-navy-900/70 px-2 py-1 text-[11px] text-emerald-100">
+            {stemDisplayName(stem)}
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }

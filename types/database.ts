@@ -615,6 +615,8 @@ export type LaiaUsage = Database['public']['Tables']['laia_usage']['Row']
 export interface SongVariationWithDetails extends SongVariation {
   songs: Pick<Song, 'id' | 'title' | 'artist' | 'youtube_url'>
   profiles: Pick<Profile, 'id' | 'full_name'> | null
+  song_stems?: Pick<SongStem, 'id' | 'stem_type' | 'original_file_name'>[]
+  is_virtual?: boolean
 }
 
 // Extended types with joined data
