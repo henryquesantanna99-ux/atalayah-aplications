@@ -13,6 +13,7 @@ CREATE POLICY "songs_editor_insert" ON songs
   );
 
 DROP POLICY IF EXISTS "songs_editor_update" ON songs;
+CREATE POLICY "songs_editor_update" ON songs;
 CREATE POLICY "songs_editor_update" ON songs
   FOR UPDATE USING (
     EXISTS (
@@ -47,12 +48,20 @@ DROP POLICY IF EXISTS "song_stems_storage_read_active" ON storage.objects;
 CREATE POLICY "song_stems_storage_read_active" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'song-stems'
-    AND EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'active')
+    AND EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = auth.uid()
+        AND p.status = 'active'
+    )
   );
 
 DROP POLICY IF EXISTS "song_stems_storage_insert_active" ON storage.objects;
 CREATE POLICY "song_stems_storage_insert_active" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'song-stems'
-    AND EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'active')
+    AND EXISTS (
+      SELECT 1 FROM profiles p
+      WHERE p.id = auth.uid()
+        AND p.status = 'active'
+    )
   );
