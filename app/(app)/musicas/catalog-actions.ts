@@ -52,7 +52,7 @@ export async function addCatalogSong(input: {
   }
 
   // Insert a new song_variation entry
-  const { error: varError } = await supabase.from('song_variations').insert({
+  const { data: variation, error: varError } = await supabase.from('song_variations').insert({
     song_id: songId,
     artist: input.artist || null,
     key_note: input.keyNote || null,
@@ -61,11 +61,13 @@ export async function addCatalogSong(input: {
     version: input.version || null,
     youtube_url: input.youtubeUrl || null,
     created_by: user.id,
-  })
+  }).select('id').single()
 
   if (varError) throw new Error(varError.message)
 
   revalidatePath('/musicas')
+
+  return { songId, variationId: variation.id }
 }
 
 export async function deleteCatalogSong(variationId: string) {

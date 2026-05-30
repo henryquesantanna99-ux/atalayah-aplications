@@ -308,6 +308,7 @@ export interface Database {
           audio_url: string
           wav_url: string | null
           storage_path: string | null
+          original_file_name: string | null
           duration: number | null
           created_at: string
         }
@@ -320,6 +321,7 @@ export interface Database {
           audio_url: string
           wav_url?: string | null
           storage_path?: string | null
+          original_file_name?: string | null
           duration?: number | null
           created_at?: string
         }
@@ -328,6 +330,7 @@ export interface Database {
           audio_url?: string
           wav_url?: string | null
           storage_path?: string | null
+          original_file_name?: string | null
           duration?: number | null
         }
         Relationships: []
