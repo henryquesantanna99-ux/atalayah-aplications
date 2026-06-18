@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Music,
+  Vote,
   CalendarDays,
   MessageSquare,
   Sparkles,
@@ -16,6 +17,7 @@ import {
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Geral' },
   { href: '/musicas', icon: Music, label: 'Músicas' },
+  { href: '/louvor', icon: Vote, label: 'Votação' },
   { href: '/agenda', icon: CalendarDays, label: 'Agenda' },
   { href: '/estudo', icon: Headphones, label: 'Estudo' },
   { href: '/chat', icon: MessageSquare, label: 'Chat' },
