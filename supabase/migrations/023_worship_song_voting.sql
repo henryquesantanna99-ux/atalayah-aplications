@@ -6,8 +6,9 @@ CREATE TABLE worship_songs (
   id UUID DEFAULT extensions.uuid_generate_v4() PRIMARY KEY,
   song_title TEXT NOT NULL,
   artist TEXT,
+  catalog_variation_id UUID REFERENCES song_variations(id) ON DELETE SET NULL,
   youtube_link TEXT,
-  category TEXT CHECK (category IN ('Prévia', 'Celebração', 'Adoração')),
+  category TEXT CHECK (category IN ('Prévia', 'Adoração', 'Palavra', 'Celebração')),
   status TEXT NOT NULL DEFAULT 'Em análise' CHECK (status IN ('Aprovada', 'Em teste', 'Repertório oficial', 'Reprovada', 'Pausada', 'Em análise', 'Necessita validação pastoral')),
   theme TEXT,
   worship_type TEXT CHECK (worship_type IN ('Sacerdotal', 'Profético', 'Ambos')),
@@ -21,6 +22,7 @@ CREATE TABLE worship_songs (
   votes INTEGER NOT NULL DEFAULT 0,
   average_rating NUMERIC(3,2),
   notes TEXT,
+  open_for_voting BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -59,17 +61,23 @@ ALTER TABLE worship_songs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE worship_song_suggestions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE worship_song_votes ENABLE ROW LEVEL SECURITY;
 
+CREATE POLICY "worship_songs_read_public_open" ON worship_songs
+  FOR SELECT USING (open_for_voting = TRUE AND status IN ('Aprovada', 'Em teste', 'Repertório oficial'));
+
 CREATE POLICY "worship_songs_read_active" ON worship_songs
   FOR SELECT USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'active'));
 
-CREATE POLICY "worship_suggestions_insert_active" ON worship_song_suggestions
-  FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'active'));
+CREATE POLICY "worship_suggestions_insert_public" ON worship_song_suggestions
+  FOR INSERT WITH CHECK (TRUE);
 
-CREATE POLICY "worship_votes_insert_active" ON worship_song_votes
-  FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'active'));
+CREATE POLICY "worship_suggestions_read_public_for_duplicate_check" ON worship_song_suggestions
+  FOR SELECT USING (TRUE);
 
-CREATE POLICY "worship_votes_read_active" ON worship_song_votes
-  FOR SELECT USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.status = 'active'));
+CREATE POLICY "worship_votes_insert_public" ON worship_song_votes
+  FOR INSERT WITH CHECK (TRUE);
+
+CREATE POLICY "worship_votes_read_public_for_duplicate_check" ON worship_song_votes
+  FOR SELECT USING (TRUE);
 
 CREATE POLICY "worship_admin_all_songs" ON worship_songs
   FOR ALL USING (EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'))
@@ -93,7 +101,7 @@ BEGIN
   WHERE id = NEW.song_id;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE TRIGGER worship_song_vote_stats_after_insert
 AFTER INSERT ON worship_song_votes

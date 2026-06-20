@@ -17,7 +17,7 @@ import {
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Geral' },
   { href: '/musicas', icon: Music, label: 'Músicas' },
-  { href: '/louvor', icon: Vote, label: 'Votação' },
+  { href: '/louvor-admin', icon: Vote, label: 'Louvor' },
   { href: '/agenda', icon: CalendarDays, label: 'Agenda' },
   { href: '/estudo', icon: Headphones, label: 'Estudo' },
   { href: '/chat', icon: MessageSquare, label: 'Chat' },

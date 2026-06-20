@@ -21,7 +21,7 @@ import { useProfile } from './profile-context'
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Visão Geral' },
   { href: '/musicas', icon: Music, label: 'Músicas' },
-  { href: '/louvor', icon: Vote, label: 'Indicação e Votação' },
+  { href: '/louvor-admin', icon: Vote, label: 'Admin Louvor' },
   { href: '/time', icon: Users, label: 'Time' },
   { href: '/agenda', icon: CalendarDays, label: 'Agenda' },
   { href: '/estudo', icon: Headphones, label: 'Estudo' },
