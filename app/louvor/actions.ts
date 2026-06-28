@@ -1,5 +1,6 @@
 'use server'
 
+import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
@@ -25,6 +26,46 @@ function normalizePhone(phone: string) {
   return phone.replace(/\D/g, '')
 }
 
+function normalizeText(value: string) {
+  return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ')
+}
+
+function createStableHash(value: string) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function createMemberKey(name: string, phone: string) {
+  return createStableHash(`${normalizePhone(phone)}:${normalizeText(name)}`)
+}
+
+function createSongKey(title: string, artist: string) {
+  return createStableHash(`${normalizeText(title)}:${normalizeText(artist)}`)
+}
+
+function sevenDaysAgoISOString() {
+  const date = new Date()
+  date.setDate(date.getDate() - 7)
+  return date.toISOString()
+}
+
+function isMissingSuggestionColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const details = [
+    'message' in error ? String(error.message) : '',
+    'details' in error ? String(error.details) : '',
+    'hint' in error ? String(error.hint) : '',
+    'code' in error ? String(error.code) : '',
+  ].join(' ')
+
+  return details.includes('PGRST204')
+    || details.includes('Could not find')
+    || details.includes('schema cache')
+    || details.includes('spiritual_area')
+    || details.includes('next_step')
+    || details.includes('member_key')
+    || details.includes('song_key')
+}
+
 
 export async function salvarIndicacao(payload: {
   nome: string
@@ -42,46 +83,79 @@ export async function salvarIndicacao(payload: {
   next_step_other?: string | null
 }): Promise<JsonResponse> {
   try {
-    const required = [payload.nome, payload.tribo, payload.musica]
+    const required = [payload.nome, payload.tribo, payload.telefone, payload.musica]
     if (required.some((value) => !value?.trim())) {
-      return { success: false, message: 'Preencha nome, tribo e música.' }
+      return { success: false, message: 'Preencha nome completo, tribo, telefone e música.' }
     }
     const supabase = await createClient()
     const telefone = normalizePhone(payload.telefone)
     const musica = payload.musica.trim()
     const artista = payload.artista.trim()
+    const memberKey = createMemberKey(payload.nome, telefone)
+    const songKey = createSongKey(musica, artista)
+
     const { data: duplicate, error: duplicateError } = await supabase
       .from('worship_song_suggestions' as never)
-      .select('id')
-      .ilike('song_title', musica)
+      .select('id, created_at')
+      .eq('member_key', memberKey)
+      .eq('song_key', songKey)
+      .gte('created_at', sevenDaysAgoISOString())
       .limit(1)
       .maybeSingle()
 
-    if (duplicateError) throw duplicateError
+    if (duplicateError && !isMissingSuggestionColumnError(duplicateError)) throw duplicateError
+    if (duplicateError && isMissingSuggestionColumnError(duplicateError)) {
+      console.warn('worship_song_suggestions is missing member_key/song_key columns; duplicate window could not be checked.', duplicateError)
+    }
     if (duplicate) {
-      return { success: false, message: 'Essa música já foi indicada. Obrigado por reforçar essa sugestão!' }
+      return { success: false, message: 'Você já indicou essa música nos últimos 7 dias. Tente indicar novamente após esse período.' }
     }
 
-    const { data, error } = await supabase
+    const legacySuggestion = {
+      name: payload.nome.trim(),
+      tribe: payload.tribo.trim(),
+      phone: telefone,
+      song_title: musica,
+      artist: artista || null,
+      youtube_link: '',
+      suggested_category: payload.categoriaSugerida || 'Não sei informar',
+      worship_type: payload.tipoLouvor || null,
+      reason: payload.motivo?.trim() || null,
+      status: 'Sugerida',
+    }
+
+    const baseSuggestion = {
+      ...legacySuggestion,
+      member_key: memberKey,
+      song_key: songKey,
+    }
+
+    const fullSuggestion = {
+      ...baseSuggestion,
+      spiritual_area: payload.spiritual_area || null,
+      spiritual_area_other: payload.spiritual_area === 'Outro' ? payload.spiritual_area_other?.trim() || null : null,
+      spiritual_experience_note: payload.spiritual_experience_note?.trim() || null,
+      next_step: payload.next_step || null,
+      next_step_other: payload.next_step === 'Outro' ? payload.next_step_other?.trim() || null : null,
+    }
+
+    let { data, error } = await supabase
       .from('worship_song_suggestions' as never)
-      .insert({
-        name: payload.nome.trim(),
-        tribe: payload.tribo.trim(),
-        phone: telefone || null,
-        song_title: musica,
-        artist: artista || null,
-        suggested_category: payload.categoriaSugerida || null,
-        worship_type: payload.tipoLouvor || null,
-        reason: payload.motivo?.trim() || null,
-        spiritual_area: payload.spiritual_area || null,
-        spiritual_area_other: payload.spiritual_area === 'Outro' ? payload.spiritual_area_other?.trim() || null : null,
-        spiritual_experience_note: payload.spiritual_experience_note?.trim() || null,
-        next_step: payload.next_step || null,
-        next_step_other: payload.next_step === 'Outro' ? payload.next_step_other?.trim() || null : null,
-        status: 'Sugerida',
-      } as never)
+      .insert(fullSuggestion as never)
       .select('id')
       .single()
+
+    if (error && isMissingSuggestionColumnError(error)) {
+      console.warn('worship_song_suggestions is missing newer columns; saving legacy suggestion only.', error)
+      const fallback = await supabase
+        .from('worship_song_suggestions' as never)
+        .insert(legacySuggestion as never)
+        .select('id')
+        .single()
+
+      data = fallback.data
+      error = fallback.error
+    }
 
     if (error) throw error
     revalidatePath('/louvor')
