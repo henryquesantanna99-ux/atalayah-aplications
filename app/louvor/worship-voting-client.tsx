@@ -60,7 +60,6 @@ const emptySuggestion = {
   telefone: '',
   musica: '',
   artista: '',
-  youtubeLink: '',
   categoriaSugerida: '',
   tipoLouvor: '',
   motivo: '',
@@ -130,19 +129,18 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
       <p className="text-sm text-[#94A3B8] mb-6">Envie uma sugestão para análise ministerial, pastoral, teológica e técnica.</p>
       <form onSubmit={submitSuggestion} className="grid gap-4">
         <div className="grid sm:grid-cols-2 gap-4"><Field label="Nome *" value={suggestion.nome} onChange={(nome) => setSuggestion({ ...suggestion, nome })} /><Field label="Tribo / Grupo / Ministério *" value={suggestion.tribo} onChange={(tribo) => setSuggestion({ ...suggestion, tribo })} /></div>
-        <Field label="Telefone / WhatsApp *" value={suggestion.telefone} onChange={(telefone) => setSuggestion({ ...suggestion, telefone })} inputMode="tel" />
+        <Field label="Telefone / WhatsApp" value={suggestion.telefone} onChange={(telefone) => setSuggestion({ ...suggestion, telefone })} inputMode="tel" />
         <div className="grid sm:grid-cols-2 gap-4"><Field label="Nome da música *" value={suggestion.musica} onChange={(musica) => setSuggestion({ ...suggestion, musica })} /><Field label="Artista / Ministério / Referência" value={suggestion.artista} onChange={(artista) => setSuggestion({ ...suggestion, artista })} /></div>
-        <Field label="Link do YouTube *" value={suggestion.youtubeLink} onChange={(youtubeLink) => setSuggestion({ ...suggestion, youtubeLink })} placeholder="https://www.youtube.com/..." />
         <div className="grid sm:grid-cols-2 gap-4">
-          <SelectField label="Categoria sugerida *" value={suggestion.categoriaSugerida} options={categories} onChange={(categoriaSugerida) => setSuggestion({ ...suggestion, categoriaSugerida })} />
+          <SelectField label="Categoria sugerida" value={suggestion.categoriaSugerida} options={categories} onChange={(categoriaSugerida) => setSuggestion({ ...suggestion, categoriaSugerida })} />
           <SelectField label="Expressa mais" value={suggestion.tipoLouvor} options={worshipTypes} onChange={(tipoLouvor) => setSuggestion({ ...suggestion, tipoLouvor })} />
         </div>
         <TextareaField label="Por que você está indicando essa música?" value={suggestion.motivo} onChange={(motivo) => setSuggestion({ ...suggestion, motivo })} />
-        <SelectField label="Durante o louvor e a ministração, em qual área você percebeu que Deus mais trabalhou no seu coração hoje? *" value={suggestion.spiritual_area} options={spiritualAreas} onChange={(spiritual_area) => setSuggestion({ ...suggestion, spiritual_area, spiritual_area_other: spiritual_area === 'Outro' ? suggestion.spiritual_area_other : '' })} />
-        {suggestion.spiritual_area === 'Outro' && <Field label="Conte em qual área Deus trabalhou *" value={suggestion.spiritual_area_other} onChange={(spiritual_area_other) => setSuggestion({ ...suggestion, spiritual_area_other })} />}
+        <SelectField label="Durante o louvor e a ministração, em qual área você percebeu que Deus mais trabalhou no seu coração hoje?" value={suggestion.spiritual_area} options={spiritualAreas} onChange={(spiritual_area) => setSuggestion({ ...suggestion, spiritual_area, spiritual_area_other: spiritual_area === 'Outro' ? suggestion.spiritual_area_other : '' })} />
+        {suggestion.spiritual_area === 'Outro' && <Field label="Conte em qual área Deus trabalhou" value={suggestion.spiritual_area_other} onChange={(spiritual_area_other) => setSuggestion({ ...suggestion, spiritual_area_other })} />}
         <TextareaField label="Se quiser, conte brevemente o que aconteceu no seu coração." value={suggestion.spiritual_experience_note} onChange={(spiritual_experience_note) => setSuggestion({ ...suggestion, spiritual_experience_note })} />
-        <SelectField label="Qual próximo passo você sente que precisa dar depois do culto de hoje? *" value={suggestion.next_step} options={nextSteps} onChange={(next_step) => setSuggestion({ ...suggestion, next_step, next_step_other: next_step === 'Outro' ? suggestion.next_step_other : '' })} />
-        {suggestion.next_step === 'Outro' && <Field label="Descreva o próximo passo *" value={suggestion.next_step_other} onChange={(next_step_other) => setSuggestion({ ...suggestion, next_step_other })} />}
+        <SelectField label="Qual próximo passo você sente que precisa dar depois do culto de hoje?" value={suggestion.next_step} options={nextSteps} onChange={(next_step) => setSuggestion({ ...suggestion, next_step, next_step_other: next_step === 'Outro' ? suggestion.next_step_other : '' })} />
+        {suggestion.next_step === 'Outro' && <Field label="Descreva o próximo passo" value={suggestion.next_step_other} onChange={(next_step_other) => setSuggestion({ ...suggestion, next_step_other })} />}
         <Button disabled={isPending} className="h-12 bg-brand hover:bg-brand/90"><Send className="w-4 h-4" />{isPending ? 'Enviando...' : 'Enviar indicação'}</Button>
       </form>
     </section>
@@ -175,8 +173,8 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
       <p className="mt-4 text-[#CBD5E1] max-w-3xl">As indicações e votações ajudam o ministério a ouvir a igreja e entender quais músicas têm edificado a congregação. A escolha final do repertório passa por avaliação ministerial, pastoral, teológica e técnica.</p>
     </div>
     <div className="grid md:grid-cols-2 gap-4">
-      <HomeCard icon={<Music2 />} title="Indicar uma música" description="Envie uma sugestão de música para o ministério avaliar." onClick={() => setView('suggest')} />
-      <HomeCard icon={<HeartHandshake />} title="Votar em músicas" description="Vote nas músicas que você gostaria de ver no repertório da igreja." onClick={() => setView('vote')} />
+      <HomeCard icon={<Music2 />} title="Indicar uma música" description="Envie uma sugestão de música para o ministério avaliar." cta="Clique aqui para indicar" onClick={() => setView('suggest')} />
+      <HomeCard icon={<HeartHandshake />} title="Votar em músicas" description="A votação pública estará disponível em breve." cta="Clique aqui para votar" disabled badge="Em breve" onClick={() => setView('vote')} />
     </div>
   </section>
 }
@@ -186,7 +184,7 @@ function getCategory(song: Song) { return song.category ?? song.categoria ?? 'N�
 function getType(song: Song) { const type = song.worship_type ?? song.tipoLouvor ?? 'Ambos'; return type === 'Os dois' ? 'Ambos' : type }
 
 function BackButton({ onClick }: { onClick: () => void }) { return <button type="button" onClick={onClick} className="mb-4 inline-flex items-center gap-2 text-sm text-[#94A3B8] hover:text-white"><ArrowLeft className="w-4 h-4" />Voltar</button> }
-function HomeCard({ icon, title, description, onClick }: { icon: React.ReactNode; title: string; description: string; onClick: () => void }) { return <button onClick={onClick} className="text-left rounded-2xl border border-white/[0.08] bg-navy-900 p-6 transition hover:border-brand/40 hover:-translate-y-0.5"><div className="w-12 h-12 rounded-2xl bg-brand/15 text-brand flex items-center justify-center [&_svg]:w-6 [&_svg]:h-6">{icon}</div><h2 className="mt-5 text-xl font-bold text-white">{title}</h2><p className="mt-2 text-[#94A3B8]">{description}</p></button> }
+function HomeCard({ icon, title, description, cta, onClick, disabled = false, badge }: { icon: React.ReactNode; title: string; description: string; cta: string; onClick: () => void; disabled?: boolean; badge?: string }) { return <button type="button" disabled={disabled} aria-disabled={disabled} onClick={onClick} className={`relative text-left rounded-2xl border border-white/[0.08] bg-navy-900 p-6 transition ${disabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:border-brand/40 hover:-translate-y-0.5'}`}>{badge && <span className="absolute right-4 top-4 rounded-full bg-amber-400 px-3 py-1 text-xs font-bold uppercase tracking-wide text-black">{badge}</span>}<div className="w-12 h-12 rounded-2xl bg-brand/15 text-brand flex items-center justify-center [&_svg]:w-6 [&_svg]:h-6">{icon}</div><h2 className="mt-5 text-xl font-bold text-white">{title}</h2><p className="mt-2 text-[#94A3B8]">{description}</p><p className="mt-4 font-semibold text-brand">{cta}</p></button> }
 function Field({ label, value, onChange, ...props }: { label: string; value: string; onChange: (value: string) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) { const id = useId(); return <div><Label htmlFor={id}>{label}</Label><Input id={id} {...props} className="mt-2 h-11 bg-black/20 border-white/10 text-white" value={value} onChange={(e) => onChange(e.target.value)} /></div> }
 function TextareaField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { const id = useId(); return <div><Label htmlFor={id}>{label}</Label><Textarea id={id} className="mt-2 min-h-28 w-full bg-black/20 border-white/10 text-white" value={value} onChange={(e) => onChange(e.target.value)} /></div> }
 function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) { const id = useId(); return <div><Label htmlFor={id}>{label}</Label><Select value={value} onValueChange={onChange}><SelectTrigger id={id} className="mt-2 min-h-11 bg-black/20 border-white/10 text-left text-white"><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> }

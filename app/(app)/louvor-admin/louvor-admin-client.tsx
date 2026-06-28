@@ -15,11 +15,11 @@ type Suggestion = {
   created_at: string
   name: string
   tribe: string
-  phone: string
+  phone: string | null
   song_title: string
   artist: string | null
-  youtube_link: string
-  suggested_category: string
+  youtube_link: string | null
+  suggested_category: string | null
   worship_type: string | null
   reason: string | null
   spiritual_area: string | null
@@ -162,14 +162,31 @@ export function LouvorAdminClient({
       <div className="mt-4 grid gap-3">
         {suggestions.map((suggestion) => <article key={suggestion.id} className="rounded-xl border border-white/[0.08] bg-black/20 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 flex-1"><h3 className="font-semibold text-white"><Music2 className="mr-2 inline h-4 w-4 text-brand" />{suggestion.song_title}</h3><p className="break-words text-sm text-[#94A3B8]">{suggestion.artist || 'Sem artista'} · indicado por {suggestion.name} ({suggestion.tribe}) · {suggestion.phone}</p>{suggestion.reason && <p className="mt-2 break-words text-sm text-[#CBD5E1]">{suggestion.reason}</p>}<SpiritualResponse suggestion={suggestion} /></div>
-            <div className="flex flex-col gap-2 sm:flex-row"><Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button><Select value={suggestion.status} onValueChange={(status) => updateSuggestion(suggestion.id, status)}><SelectTrigger className="w-full sm:w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
+            <div className="min-w-0 flex-1"><h3 className="font-semibold text-white"><Music2 className="mr-2 inline h-4 w-4 text-brand" />{suggestion.song_title}</h3><p className="break-words text-sm text-[#94A3B8]">{suggestion.artist || 'Sem artista'} · indicado por {suggestion.name} ({suggestion.tribe}){suggestion.phone ? ` · ${suggestion.phone}` : ''}</p><SuggestionAnalysis suggestion={suggestion} />{suggestion.reason && <p className="mt-2 break-words text-sm text-[#CBD5E1]">{suggestion.reason}</p>}<SpiritualResponse suggestion={suggestion} /></div>
+            <div className="flex flex-col gap-2 sm:flex-row">{suggestion.youtube_link && <Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button>}<Select value={suggestion.status} onValueChange={(status) => updateSuggestion(suggestion.id, status)}><SelectTrigger className="w-full sm:w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
           </div>
         </article>)}
         {suggestions.length === 0 && <p className="text-sm text-[#94A3B8]">Nenhuma indicação recebida ainda.</p>}
       </div>
     </section>
   </div>
+}
+
+function SuggestionAnalysis({ suggestion }: { suggestion: Suggestion }) {
+  const items = [
+    ['Categoria', suggestion.suggested_category],
+    ['Tipo', suggestion.worship_type],
+    ['Status', suggestion.status],
+    ['Recebida em', suggestion.created_at ? new Date(suggestion.created_at).toLocaleDateString('pt-BR') : null],
+  ].filter(([, value]) => Boolean(value))
+
+  if (items.length === 0) return null
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {items.map(([label, value]) => <Badge key={label} variant="outline" className="border-white/10 text-[#CBD5E1]">{label}: {value}</Badge>)}
+    </div>
+  )
 }
 
 function SpiritualResponse({ suggestion }: { suggestion: Suggestion }) {
