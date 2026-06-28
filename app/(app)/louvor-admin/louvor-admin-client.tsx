@@ -18,7 +18,7 @@ type Suggestion = {
   phone: string
   song_title: string
   artist: string | null
-  youtube_link: string
+  youtube_link: string | null
   suggested_category: string
   worship_type: string | null
   reason: string | null
@@ -163,7 +163,7 @@ export function LouvorAdminClient({
         {suggestions.map((suggestion) => <article key={suggestion.id} className="rounded-xl border border-white/[0.08] bg-black/20 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1"><h3 className="font-semibold text-white"><Music2 className="mr-2 inline h-4 w-4 text-brand" />{suggestion.song_title}</h3><p className="break-words text-sm text-[#94A3B8]">{suggestion.artist || 'Sem artista'} · indicado por {suggestion.name} ({suggestion.tribe}) · {suggestion.phone}</p>{suggestion.reason && <p className="mt-2 break-words text-sm text-[#CBD5E1]">{suggestion.reason}</p>}<SpiritualResponse suggestion={suggestion} /></div>
-            <div className="flex flex-col gap-2 sm:flex-row"><Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button><Select value={suggestion.status} onValueChange={(status) => updateSuggestion(suggestion.id, status)}><SelectTrigger className="w-full sm:w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
+            <div className="flex flex-col gap-2 sm:flex-row">{suggestion.youtube_link && <Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button>}<Select value={suggestion.status} onValueChange={(status) => updateSuggestion(suggestion.id, status)}><SelectTrigger className="w-full sm:w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
           </div>
         </article>)}
         {suggestions.length === 0 && <p className="text-sm text-[#94A3B8]">Nenhuma indicação recebida ainda.</p>}

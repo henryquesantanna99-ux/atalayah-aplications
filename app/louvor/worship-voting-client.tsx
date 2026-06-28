@@ -60,7 +60,6 @@ const emptySuggestion = {
   telefone: '',
   musica: '',
   artista: '',
-  youtubeLink: '',
   categoriaSugerida: '',
   tipoLouvor: '',
   motivo: '',
@@ -132,7 +131,6 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
         <div className="grid sm:grid-cols-2 gap-4"><Field label="Nome *" value={suggestion.nome} onChange={(nome) => setSuggestion({ ...suggestion, nome })} /><Field label="Tribo / Grupo / Ministério *" value={suggestion.tribo} onChange={(tribo) => setSuggestion({ ...suggestion, tribo })} /></div>
         <Field label="Telefone / WhatsApp *" value={suggestion.telefone} onChange={(telefone) => setSuggestion({ ...suggestion, telefone })} inputMode="tel" />
         <div className="grid sm:grid-cols-2 gap-4"><Field label="Nome da música *" value={suggestion.musica} onChange={(musica) => setSuggestion({ ...suggestion, musica })} /><Field label="Artista / Ministério / Referência" value={suggestion.artista} onChange={(artista) => setSuggestion({ ...suggestion, artista })} /></div>
-        <Field label="Link do YouTube *" value={suggestion.youtubeLink} onChange={(youtubeLink) => setSuggestion({ ...suggestion, youtubeLink })} placeholder="https://www.youtube.com/..." />
         <div className="grid sm:grid-cols-2 gap-4">
           <SelectField label="Categoria sugerida *" value={suggestion.categoriaSugerida} options={categories} onChange={(categoriaSugerida) => setSuggestion({ ...suggestion, categoriaSugerida })} />
           <SelectField label="Expressa mais" value={suggestion.tipoLouvor} options={worshipTypes} onChange={(tipoLouvor) => setSuggestion({ ...suggestion, tipoLouvor })} />
