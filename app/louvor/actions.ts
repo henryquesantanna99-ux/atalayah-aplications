@@ -40,11 +40,22 @@ export async function salvarIndicacao(payload: {
   categoriaSugerida: string
   tipoLouvor?: string | null
   motivo?: string | null
+  spiritual_area: string
+  spiritual_area_other?: string | null
+  spiritual_experience_note?: string | null
+  next_step: string
+  next_step_other?: string | null
 }): Promise<JsonResponse> {
   try {
-    const required = [payload.nome, payload.telefone, payload.musica, payload.youtubeLink, payload.categoriaSugerida]
+    const required = [payload.nome, payload.telefone, payload.musica, payload.youtubeLink, payload.categoriaSugerida, payload.spiritual_area, payload.next_step]
     if (required.some((value) => !value?.trim())) {
-      return { success: false, message: 'Preencha nome, telefone, música, link do YouTube e categoria.' }
+      return { success: false, message: 'Preencha nome, telefone, música, link do YouTube, categoria, área espiritual e próximo passo.' }
+    }
+    if (payload.spiritual_area === 'Outro' && !payload.spiritual_area_other?.trim()) {
+      return { success: false, message: 'Conte em qual área Deus trabalhou no seu coração.' }
+    }
+    if (payload.next_step === 'Outro' && !payload.next_step_other?.trim()) {
+      return { success: false, message: 'Descreva o próximo passo que você sente que precisa dar.' }
     }
     if (!isYoutubeUrl(payload.youtubeLink)) {
       return { success: false, message: 'Informe um link válido do YouTube.' }
@@ -80,6 +91,11 @@ export async function salvarIndicacao(payload: {
         suggested_category: payload.categoriaSugerida,
         worship_type: payload.tipoLouvor || null,
         reason: payload.motivo?.trim() || null,
+        spiritual_area: payload.spiritual_area,
+        spiritual_area_other: payload.spiritual_area === 'Outro' ? payload.spiritual_area_other?.trim() || null : null,
+        spiritual_experience_note: payload.spiritual_experience_note?.trim() || null,
+        next_step: payload.next_step,
+        next_step_other: payload.next_step === 'Outro' ? payload.next_step_other?.trim() || null : null,
         status: 'Sugerida',
       } as never)
       .select('id')

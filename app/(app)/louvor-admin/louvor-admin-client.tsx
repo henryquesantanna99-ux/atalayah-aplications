@@ -22,6 +22,11 @@ type Suggestion = {
   suggested_category: string
   worship_type: string | null
   reason: string | null
+  spiritual_area: string | null
+  spiritual_area_other: string | null
+  spiritual_experience_note: string | null
+  next_step: string | null
+  next_step_other: string | null
   status: string
 }
 
@@ -157,14 +162,26 @@ export function LouvorAdminClient({
       <div className="mt-4 grid gap-3">
         {suggestions.map((suggestion) => <article key={suggestion.id} className="rounded-xl border border-white/[0.08] bg-black/20 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div><h3 className="font-semibold text-white"><Music2 className="mr-2 inline h-4 w-4 text-brand" />{suggestion.song_title}</h3><p className="text-sm text-[#94A3B8]">{suggestion.artist || 'Sem artista'} · indicado por {suggestion.name} ({suggestion.tribe}) · {suggestion.phone}</p>{suggestion.reason && <p className="mt-2 text-sm text-[#CBD5E1]">{suggestion.reason}</p>}</div>
-            <div className="flex flex-col gap-2 sm:flex-row"><Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button><Select value={suggestion.status} onValueChange={(status) => updateSuggestion(suggestion.id, status)}><SelectTrigger className="w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
+            <div className="min-w-0 flex-1"><h3 className="font-semibold text-white"><Music2 className="mr-2 inline h-4 w-4 text-brand" />{suggestion.song_title}</h3><p className="break-words text-sm text-[#94A3B8]">{suggestion.artist || 'Sem artista'} · indicado por {suggestion.name} ({suggestion.tribe}) · {suggestion.phone}</p>{suggestion.reason && <p className="mt-2 break-words text-sm text-[#CBD5E1]">{suggestion.reason}</p>}<SpiritualResponse suggestion={suggestion} /></div>
+            <div className="flex flex-col gap-2 sm:flex-row"><Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button><Select value={suggestion.status} onValueChange={(status) => updateSuggestion(suggestion.id, status)}><SelectTrigger className="w-full sm:w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
           </div>
         </article>)}
         {suggestions.length === 0 && <p className="text-sm text-[#94A3B8]">Nenhuma indicação recebida ainda.</p>}
       </div>
     </section>
   </div>
+}
+
+function SpiritualResponse({ suggestion }: { suggestion: Suggestion }) {
+  if (!suggestion.spiritual_area && !suggestion.spiritual_experience_note && !suggestion.next_step) return null
+
+  return (
+    <div className="mt-3 grid gap-2 rounded-xl border border-white/[0.06] bg-navy-900/70 p-3 text-sm text-[#CBD5E1]">
+      {suggestion.spiritual_area && <p><span className="font-semibold text-white">Área percebida:</span> {suggestion.spiritual_area}{suggestion.spiritual_area_other ? ` — ${suggestion.spiritual_area_other}` : ''}</p>}
+      {suggestion.spiritual_experience_note && <p className="break-words"><span className="font-semibold text-white">Relato:</span> {suggestion.spiritual_experience_note}</p>}
+      {suggestion.next_step && <p><span className="font-semibold text-white">Próximo passo:</span> {suggestion.next_step}{suggestion.next_step_other ? ` — ${suggestion.next_step_other}` : ''}</p>}
+    </div>
+  )
 }
 
 function Field({ label, value, onChange, ...props }: { label: string; value: string; onChange: (value: string) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) { return <div><Label>{label}</Label><Input {...props} className="mt-2 h-11 bg-black/20 border-white/10 text-white" value={value} onChange={(event) => onChange(event.target.value)} /></div> }
