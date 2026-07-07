@@ -2,11 +2,32 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createMiddlewareClient } from '@/lib/supabase/middleware'
 
-const PUBLIC_ROUTES = ['/', '/login', '/auth/callback', '/auth/error', '/louvor']
+const PUBLIC_PAGE_ROUTES = ['/', '/louvor', '/inscricao']
+const AUTH_ROUTES = ['/login', '/auth/callback', '/auth/error']
+
+function isPublicInscricaoApi(pathname: string) {
+  return /^\/api\/inscricoes\/[^/]+\/(status|pix)$/.test(pathname)
+}
+
+function isPublicRoute(pathname: string) {
+  return (
+    PUBLIC_PAGE_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
+    AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
+    isPublicInscricaoApi(pathname) ||
+    pathname === '/api/mercado-pago/webhook'
+  )
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const response = NextResponse.next({ request })
+  const publicRoute = isPublicRoute(pathname)
+
+  // Public registration/voting/webhook routes must never require an auth session.
+  if (publicRoute && pathname !== '/login') {
+    return response
+  }
+
   const supabase = createMiddlewareClient(request, response)
 
   // Refresh session (required by @supabase/ssr)
@@ -14,12 +35,8 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const isPublicRoute = PUBLIC_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith('/auth/')
-  )
-
   // Not authenticated → redirect to login (except public routes)
-  if (!user && !isPublicRoute) {
+  if (!user && !publicRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -29,7 +46,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check profile status for authenticated users on protected routes
-  if (user && !isPublicRoute) {
+  if (user && !publicRoute) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('status, onboarding_completed')
