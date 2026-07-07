@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createMiddlewareClient } from '@/lib/supabase/middleware'
 
-const PUBLIC_ROUTES = ['/', '/login', '/auth/callback', '/auth/error', '/louvor']
+const PUBLIC_ROUTES = ['/', '/login', '/auth/callback', '/auth/error', '/louvor', '/inscricao', '/api/inscricoes', '/api/mercado-pago/webhook']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const isPublicRoute = PUBLIC_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith('/auth/')
+    (route) => pathname === route || pathname.startsWith('/auth/') || pathname.startsWith('/api/inscricoes/')
   )
 
   // Not authenticated → redirect to login (except public routes)
