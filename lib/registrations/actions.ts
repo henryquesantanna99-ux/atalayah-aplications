@@ -2,7 +2,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { classifyAge } from './types'
 
 type RegistrationInput = Record<string, string | number | null | undefined>
@@ -10,7 +10,7 @@ type RegistrationInput = Record<string, string | number | null | undefined>
 const PAYMENT_AMOUNT = 29
 
 export async function criarInscricao(payload: RegistrationInput) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const idade = payload.idade === '' || payload.idade === undefined || payload.idade === null ? null : Number(payload.idade)
   const tipo = payload.tipo_inscricao === 'para_jovem' ? 'para_jovem' : 'pra_mim'
   const record = {
