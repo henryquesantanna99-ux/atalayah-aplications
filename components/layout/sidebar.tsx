@@ -13,6 +13,7 @@ import {
   Headphones,
   MessageSquare,
   Sparkles,
+  Church,
   LogOut,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Visão Geral' },
   { href: '/musicas', icon: Music, label: 'Músicas' },
   { href: '/louvor-admin', icon: Vote, label: 'Admin Louvor' },
+  { href: '/seu-ministerio', icon: Church, label: 'Seu Ministério' },
   { href: '/inscricoes', icon: ClipboardList, label: 'Inscrições' },
   { href: '/time', icon: Users, label: 'Time' },
   { href: '/agenda', icon: CalendarDays, label: 'Agenda' },
