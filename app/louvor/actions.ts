@@ -64,6 +64,8 @@ function isMissingSuggestionColumnError(error: unknown) {
     || details.includes('next_step')
     || details.includes('member_key')
     || details.includes('song_key')
+    || details.includes('youtube_video_id')
+    || details.includes('age_range')
 }
 
 
@@ -81,6 +83,14 @@ export async function salvarIndicacao(payload: {
   spiritual_experience_note?: string | null
   next_step: string
   next_step_other?: string | null
+  faixaEtaria?: string | null
+  ministerio?: string | null
+  youtube_video_id?: string | null
+  youtube_title?: string | null
+  youtube_channel?: string | null
+  youtube_thumbnail?: string | null
+  youtube_duration?: string | null
+  youtube_url?: string | null
 }): Promise<JsonResponse> {
   try {
     const required = [payload.nome, payload.tribo, payload.telefone, payload.musica]
@@ -128,6 +138,14 @@ export async function salvarIndicacao(payload: {
       ...legacySuggestion,
       member_key: memberKey,
       song_key: songKey,
+      age_range: payload.faixaEtaria || null,
+      ministry: payload.ministerio?.trim() || null,
+      youtube_video_id: payload.youtube_video_id || null,
+      youtube_title: payload.youtube_title?.trim() || null,
+      youtube_channel: payload.youtube_channel?.trim() || null,
+      youtube_thumbnail: payload.youtube_thumbnail || null,
+      youtube_duration: payload.youtube_duration || null,
+      youtube_url: payload.youtube_url || null,
     }
 
     const fullSuggestion = {
