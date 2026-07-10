@@ -16,3 +16,14 @@ export async function soundchartsGet<T>(path: string, params: Record<string, str
   if (!response.ok) throw new Error(json?.error?.message ?? 'Não foi possível consultar o Soundcharts.')
   return json as T
 }
+
+export async function searchSoundchartsSong(input: { title: string; artist?: string | null }) {
+  if (!process.env.SOUNDCHARTS_ACCESS_TOKEN && !process.env.SOUNDCHARTS_APP_ID && !process.env.SOUNDCHARTS_API_KEY) {
+    return null
+  }
+
+  const term = [input.title, input.artist].filter(Boolean).join(' ')
+  if (!term.trim()) return null
+
+  return soundchartsGet<unknown>(`/api/v2/song/search/${encodeURIComponent(term)}`)
+}

@@ -3,6 +3,8 @@
 import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { findBestLyrics } from '@/lib/music/lrclib'
+import { searchSoundchartsSong } from '@/lib/music/soundcharts'
 
 type JsonResponse<T = unknown> = { success: boolean; message: string; data?: T }
 
@@ -42,6 +44,64 @@ function createSongKey(title: string, artist: string) {
   return createStableHash(`${normalizeText(title)}:${normalizeText(artist)}`)
 }
 
+
+async function enrichNewSuggestion(supabase: Awaited<ReturnType<typeof createClient>>, suggestionId: string, payload: {
+  musica: string
+  artista?: string | null
+  youtube_video_id?: string | null
+  youtube_title?: string | null
+  youtube_channel?: string | null
+  youtube_thumbnail?: string | null
+  youtube_duration?: string | null
+  youtube_url?: string | null
+}) {
+  try {
+    const [lyrics, soundcharts] = await Promise.all([
+      findBestLyrics({ trackName: payload.musica, artistName: payload.artista }).catch((error) => {
+        console.warn('LRCLIB public enrichment failed', error)
+        return null
+      }),
+      searchSoundchartsSong({ title: payload.musica, artist: payload.artista }).catch((error) => {
+        console.warn('Soundcharts public enrichment failed', error)
+        return null
+      }),
+    ])
+
+    const metadataPayload = {
+      youtube: {
+        video_id: payload.youtube_video_id ?? null,
+        title: payload.youtube_title ?? payload.musica,
+        channel: payload.youtube_channel ?? payload.artista ?? null,
+        thumbnail: payload.youtube_thumbnail ?? null,
+        duration: payload.youtube_duration ?? null,
+        url: payload.youtube_url ?? null,
+      },
+      soundcharts,
+      enriched_at: new Date().toISOString(),
+      trigger: 'public_suggestion_submit',
+    }
+
+    const { error } = await supabase
+      .from('worship_song_suggestions' as never)
+      .update({
+        lyrics_plain: lyrics?.plainLyrics ?? null,
+        lyrics_synced: lyrics?.syncedLyrics ?? null,
+        lyrics_source: lyrics ? 'lrclib' : null,
+        lyrics_confidence: lyrics ? 0.75 : null,
+        lyrics_fetched_at: lyrics ? new Date().toISOString() : null,
+        metadata_source: soundcharts ? 'soundcharts' : 'youtube',
+        metadata_payload: metadataPayload,
+        metadata_fetched_at: new Date().toISOString(),
+        status: 'Em análise',
+      } as never)
+      .eq('id', suggestionId)
+
+    if (error && !isMissingSuggestionColumnError(error)) throw error
+  } catch (error) {
+    console.warn('Não foi possível enriquecer a indicação automaticamente.', error)
+  }
+}
+
 function sevenDaysAgoISOString() {
   const date = new Date()
   date.setDate(date.getDate() - 7)
@@ -66,6 +126,8 @@ function isMissingSuggestionColumnError(error: unknown) {
     || details.includes('song_key')
     || details.includes('youtube_video_id')
     || details.includes('age_range')
+    || details.includes('lyrics_plain')
+    || details.includes('metadata_payload')
 }
 
 
@@ -176,6 +238,12 @@ export async function salvarIndicacao(payload: {
     }
 
     if (error) throw error
+
+    const suggestionId = (data as { id?: string } | null)?.id
+    if (suggestionId) {
+      await enrichNewSuggestion(supabase, suggestionId, payload)
+    }
+
     revalidatePath('/louvor')
     return { success: true, message: 'Sua indicação foi enviada com sucesso. O ministério irá avaliar com carinho.', data }
   } catch (error) {

@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { canEdit } from '@/lib/permissions'
 import { generateText } from 'ai'
 import { openai } from '@/lib/openai'
+import { findBestLyrics } from '@/lib/music/lrclib'
+import { searchSoundchartsSong } from '@/lib/music/soundcharts'
 
 type AdminResponse<T = unknown> = { success: boolean; message: string; data?: T }
 
@@ -364,6 +366,68 @@ export async function criarSugestaoRepertorio(): Promise<AdminResponse> {
   } catch (error) {
     console.error('criarSugestaoRepertorio', error)
     return { success: false, message: 'Não foi possível criar sugestão de repertório.' }
+  }
+}
+
+
+export async function enriquecerIndicacao(id: string): Promise<AdminResponse> {
+  try {
+    const { supabase } = await requireWorshipAdmin()
+    const { data: suggestion, error: suggestionError } = await supabase
+      .from('worship_song_suggestions' as never)
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (suggestionError) throw suggestionError
+    const item = suggestion as unknown as WorshipSuggestionRow & { youtube_url?: string | null; youtube_video_id?: string | null; youtube_title?: string | null; youtube_channel?: string | null; youtube_thumbnail?: string | null; youtube_duration?: string | null }
+
+    const [lyrics, soundcharts] = await Promise.all([
+      findBestLyrics({ trackName: item.song_title, artistName: item.artist }).catch((error) => {
+        console.warn('LRCLIB enrichment failed', error)
+        return null
+      }),
+      searchSoundchartsSong({ title: item.song_title, artist: item.artist }).catch((error) => {
+        console.warn('Soundcharts enrichment failed', error)
+        return null
+      }),
+    ])
+
+    const metadataPayload = {
+      youtube: {
+        video_id: item.youtube_video_id ?? null,
+        title: item.youtube_title ?? null,
+        channel: item.youtube_channel ?? item.artist ?? null,
+        thumbnail: item.youtube_thumbnail ?? null,
+        duration: item.youtube_duration ?? null,
+        url: item.youtube_url ?? item.youtube_link ?? null,
+      },
+      soundcharts,
+      enriched_at: new Date().toISOString(),
+    }
+
+    const { error: updateError } = await supabase
+      .from('worship_song_suggestions' as never)
+      .update({
+        lyrics_plain: lyrics?.plainLyrics ?? null,
+        lyrics_synced: lyrics?.syncedLyrics ?? null,
+        lyrics_source: lyrics ? 'lrclib' : null,
+        lyrics_confidence: lyrics ? 0.75 : null,
+        lyrics_fetched_at: lyrics ? new Date().toISOString() : null,
+        metadata_source: soundcharts ? 'soundcharts' : 'youtube',
+        metadata_payload: metadataPayload,
+        metadata_fetched_at: new Date().toISOString(),
+        status: 'Em análise',
+      } as never)
+      .eq('id', id)
+
+    if (updateError) throw updateError
+
+    revalidatePath('/louvor-admin')
+    return { success: true, message: lyrics ? 'Indicação enriquecida com letra e metadados.' : 'Indicação enriquecida com metadados disponíveis.' }
+  } catch (error) {
+    console.error('enriquecerIndicacao', error)
+    return { success: false, message: 'Não foi possível enriquecer a indicação.' }
   }
 }
 
