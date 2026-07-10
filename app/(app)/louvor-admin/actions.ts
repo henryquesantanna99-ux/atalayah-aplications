@@ -53,7 +53,7 @@ async function requireWorshipAdmin() {
     throw new Error('Forbidden')
   }
 
-  return { supabase }
+  return { supabase, user }
 }
 
 export async function listarAdministracaoLouvor() {
@@ -177,6 +177,12 @@ export async function atualizarStatusIndicacao(id: string, status: string): Prom
   }
 }
 
+
+function normalizeSetlistMoment(value?: string | null) {
+  return ['Prévia', 'Adoração', 'Palavra', 'Celebração'].includes(value ?? '')
+    ? (value as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração')
+    : null
+}
 
 async function getLatestMinistryProfile(supabase: Awaited<ReturnType<typeof createClient>>) {
   const { data } = await supabase
@@ -335,7 +341,7 @@ export async function criarSugestaoRepertorio(): Promise<AdminResponse> {
 
     const suggestedSetlist = selected.map((suggestion, index) => ({
       position: index + 1,
-      moment: suggestion.suggested_category || (index === 0 ? 'Prévia' : index === selected.length - 1 ? 'Adoração' : 'Celebração'),
+      moment: normalizeSetlistMoment(suggestion.suggested_category) || (index === 0 ? 'Prévia' : index === selected.length - 1 ? 'Adoração' : 'Celebração'),
       suggestion_id: suggestion.id,
       title: suggestion.song_title,
       artist: suggestion.artist,
@@ -358,5 +364,152 @@ export async function criarSugestaoRepertorio(): Promise<AdminResponse> {
   } catch (error) {
     console.error('criarSugestaoRepertorio', error)
     return { success: false, message: 'Não foi possível criar sugestão de repertório.' }
+  }
+}
+
+export async function adicionarIndicacaoAoRepertorio(id: string): Promise<AdminResponse> {
+  try {
+    const { supabase, user } = await requireWorshipAdmin()
+    const { data: suggestion, error: suggestionError } = await supabase
+      .from('worship_song_suggestions' as never)
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (suggestionError) throw suggestionError
+    const item = suggestion as unknown as WorshipSuggestionRow & { youtube_url?: string | null }
+    const title = item.song_title?.trim()
+    if (!title) return { success: false, message: 'A indicação não possui nome da música.' }
+
+    const { data: existingSong, error: existingError } = await supabase
+      .from('songs')
+      .select('id')
+      .ilike('title', title)
+      .maybeSingle()
+
+    if (existingError) throw existingError
+
+    let songId = existingSong?.id as string | undefined
+    const youtubeUrl = item.youtube_url || item.youtube_link || null
+
+    if (!songId) {
+      const { data: createdSong, error: songError } = await supabase
+        .from('songs')
+        .insert({
+          title,
+          artist: item.artist || null,
+          youtube_url: youtubeUrl,
+          created_by: user.id,
+        })
+        .select('id')
+        .single()
+
+      if (songError) throw songError
+      songId = createdSong.id
+    }
+
+    const { error: variationError } = await supabase.from('song_variations').insert({
+      song_id: songId,
+      artist: item.artist || null,
+      moment: normalizeSetlistMoment(item.suggested_category),
+      youtube_url: youtubeUrl,
+      created_by: user.id,
+    })
+
+    if (variationError) throw variationError
+
+    await supabase.from('worship_song_suggestions' as never).update({ status: 'Repertório oficial' } as never).eq('id', id)
+
+    revalidatePath('/musicas')
+    revalidatePath('/louvor-admin')
+    return { success: true, message: 'Música adicionada ao repertório geral.' }
+  } catch (error) {
+    console.error('adicionarIndicacaoAoRepertorio', error)
+    return { success: false, message: 'Não foi possível adicionar a música ao repertório geral.' }
+  }
+}
+
+function nextSundayISO() {
+  const date = new Date()
+  const day = date.getDay()
+  const daysUntilSunday = day === 0 ? 7 : 7 - day
+  date.setDate(date.getDate() + daysUntilSunday)
+  return date.toISOString().slice(0, 10)
+}
+
+export async function adicionarSugestaoRepertorioNaProximaEscala(id: string): Promise<AdminResponse> {
+  try {
+    const { supabase, user } = await requireWorshipAdmin()
+    const { data: repertoire, error: repertoireError } = await supabase
+      .from('repertoire_suggestions' as never)
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (repertoireError) throw repertoireError
+
+    const item = repertoire as unknown as {
+      title: string
+      suggested_setlist: Array<{ title?: string; artist?: string | null; moment?: string | null; youtube_url?: string | null }>
+    }
+    const songs = (item.suggested_setlist ?? []).filter((song) => song.title?.trim())
+    if (songs.length === 0) return { success: false, message: 'A sugestão não possui músicas para enviar à escala.' }
+
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: nextEvent, error: eventLookupError } = await supabase
+      .from('events')
+      .select('id, title, date')
+      .eq('type', 'culto')
+      .gte('date', today)
+      .order('date', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (eventLookupError) throw eventLookupError
+
+    let eventId = nextEvent?.id
+    let eventTitle = nextEvent?.title ?? 'Culto sugerido pelo repertório'
+    let eventDate = nextEvent?.date ?? nextSundayISO()
+
+    if (!eventId) {
+      const { data: createdEvent, error: createEventError } = await supabase
+        .from('events')
+        .insert({
+          title: eventTitle,
+          type: 'culto',
+          date: eventDate,
+          notes: `Criado a partir da sugestão de repertório: ${item.title}`,
+          created_by: user.id,
+        })
+        .select('id, title, date')
+        .single()
+
+      if (createEventError) throw createEventError
+      eventId = createdEvent.id
+      eventTitle = createdEvent.title
+      eventDate = createdEvent.date
+    }
+
+    const { error: setlistError } = await supabase.from('setlist_songs').insert(
+      songs.map((song, index) => ({
+        event_id: eventId,
+        order_index: index,
+        song_title: song.title!.trim(),
+        artist: song.artist ?? null,
+        moment: normalizeSetlistMoment(song.moment),
+        reference_link: song.youtube_url ?? null,
+      }))
+    )
+
+    if (setlistError) throw setlistError
+
+    await supabase.from('repertoire_suggestions' as never).update({ status: 'scheduled' } as never).eq('id', id)
+
+    revalidatePath('/agenda')
+    revalidatePath('/louvor-admin')
+    return { success: true, message: `Repertório adicionado à escala ${eventTitle} (${eventDate}).` }
+  } catch (error) {
+    console.error('adicionarSugestaoRepertorioNaProximaEscala', error)
+    return { success: false, message: 'Não foi possível adicionar o repertório à próxima escala.' }
   }
 }
