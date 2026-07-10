@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { CalendarPlus, CheckCircle2, DatabaseZap, ExternalLink, Folder, LayoutGrid, List, Music2, Plus, RefreshCw, Sparkles } from 'lucide-react'
+import { ArrowDown, ArrowUp, CalendarPlus, CheckCircle2, DatabaseZap, ExternalLink, Folder, LayoutGrid, List, Music2, Plus, RefreshCw, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -51,9 +51,17 @@ type RepertoireSuggestion = {
   id: string
   title: string
   pastoral_direction: string | null
-  suggested_setlist: Array<{ title?: string; artist?: string | null; moment?: string; reason?: string }> | null
+  suggested_setlist: DraftSetlistSong[] | null
   status: string | null
   created_at: string
+}
+
+type DraftSetlistSong = {
+  title?: string
+  artist?: string | null
+  moment?: string | null
+  reason?: string
+  youtube_url?: string | null
 }
 
 type UpcomingEvent = {
@@ -95,6 +103,7 @@ export function LouvorAdminClient({
   const [suggestionView, setSuggestionView] = useState<'boards' | 'list'>('boards')
   const [selectedSuggestionDate, setSelectedSuggestionDate] = useState('')
   const [selectedEventByRepertoire, setSelectedEventByRepertoire] = useState<Record<string, string>>({})
+  const [draftSetlistByRepertoire, setDraftSetlistByRepertoire] = useState<Record<string, DraftSetlistSong[]>>({})
   const groupedSuggestions = useMemo(() => groupSuggestionsByDate(suggestions), [suggestions])
   const activeSuggestionGroup = groupedSuggestions.find((group) => group.dateKey === selectedSuggestionDate) ?? groupedSuggestions[0]
   const activeSuggestionDate = activeSuggestionGroup?.dateKey ?? ''
@@ -171,10 +180,24 @@ export function LouvorAdminClient({
 
   function addRepertoireToNextScale(id: string) {
     startTransition(async () => {
-      const response = await adicionarSugestaoRepertorioNaProximaEscala(id, selectedEventByRepertoire[id] || null)
+      const response = await adicionarSugestaoRepertorioNaProximaEscala(id, selectedEventByRepertoire[id] || null, draftSetlistByRepertoire[id])
       if (response.success) toast.success(response.message)
       else toast.error(response.message)
     })
+  }
+
+  function getDraftSetlist(item: RepertoireSuggestion) {
+    return draftSetlistByRepertoire[item.id] ?? item.suggested_setlist ?? []
+  }
+
+  function moveDraftSong(item: RepertoireSuggestion, fromIndex: number, direction: -1 | 1) {
+    const current = getDraftSetlist(item)
+    const toIndex = fromIndex + direction
+    if (toIndex < 0 || toIndex >= current.length) return
+    const next = [...current]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    setDraftSetlistByRepertoire((drafts) => ({ ...drafts, [item.id]: next }))
   }
 
   function updateSuggestion(id: string, status: string) {
@@ -201,7 +224,7 @@ export function LouvorAdminClient({
       {repertoireSuggestions.length > 0 && <div className="mt-5 grid gap-3 lg:grid-cols-2">
         {repertoireSuggestions.map((item) => <article key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
           <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-white">{item.title}</h3><p className="mt-1 text-sm text-[#94A3B8]">{item.pastoral_direction || 'Direção pastoral não informada'}</p></div><Badge variant="outline" className="border-white/10 text-[#CBD5E1]">{item.status || 'draft'}</Badge></div>
-          <div className="mt-3 space-y-2">{(item.suggested_setlist ?? []).slice(0, 5).map((song, index) => <p key={`${item.id}-${index}`} className="text-sm text-[#CBD5E1]"><span className="font-semibold text-white">{index + 1}. {song.title || 'Música sem título'}</span>{song.artist ? ` — ${song.artist}` : ''}{song.moment ? ` · ${song.moment}` : ''}</p>)}</div>
+          <div className="mt-3 space-y-2">{getDraftSetlist(item).slice(0, 5).map((song, index) => <div key={`${item.id}-${index}-${song.title}`} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2 text-sm text-[#CBD5E1]"><div className="flex min-w-0 flex-1 flex-col"><span className="truncate font-semibold text-white">{index + 1}. {song.title || 'Música sem título'}</span><span className="truncate text-xs text-[#94A3B8]">{song.artist || 'Sem artista'}{song.moment ? ` · ${song.moment}` : ''}</span></div><Button type="button" size="icon" variant="ghost" disabled={index === 0 || item.status === 'scheduled'} onClick={() => moveDraftSong(item, index, -1)} className="text-[#CBD5E1] hover:bg-white/10 hover:text-white"><ArrowUp className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" disabled={index === getDraftSetlist(item).length - 1 || item.status === 'scheduled'} onClick={() => moveDraftSong(item, index, 1)} className="text-[#CBD5E1] hover:bg-white/10 hover:text-white"><ArrowDown className="h-4 w-4" /></Button></div>)}</div>
           <div className="mt-4 grid gap-2 sm:grid-cols-[1fr,auto]">
             <Select value={selectedEventByRepertoire[item.id] ?? 'auto'} onValueChange={(eventId) => setSelectedEventByRepertoire((current) => ({ ...current, [item.id]: eventId === 'auto' ? '' : eventId }))}>
               <SelectTrigger className="border-white/10 bg-black/20 text-white"><SelectValue /></SelectTrigger>

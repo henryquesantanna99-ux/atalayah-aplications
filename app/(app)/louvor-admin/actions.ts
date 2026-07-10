@@ -509,7 +509,7 @@ function nextSundayISO() {
   return date.toISOString().slice(0, 10)
 }
 
-export async function adicionarSugestaoRepertorioNaProximaEscala(id: string, selectedEventId?: string | null): Promise<AdminResponse> {
+export async function adicionarSugestaoRepertorioNaProximaEscala(id: string, selectedEventId?: string | null, setlistOverride?: Array<{ title?: string; artist?: string | null; moment?: string | null; youtube_url?: string | null }>): Promise<AdminResponse> {
   try {
     const { supabase, user } = await requireWorshipAdmin()
     const { data: repertoire, error: repertoireError } = await supabase
@@ -524,7 +524,8 @@ export async function adicionarSugestaoRepertorioNaProximaEscala(id: string, sel
       title: string
       suggested_setlist: Array<{ title?: string; artist?: string | null; moment?: string | null; youtube_url?: string | null }>
     }
-    const songs = (item.suggested_setlist ?? []).filter((song) => song.title?.trim())
+    const sourceSetlist = setlistOverride?.length ? setlistOverride : item.suggested_setlist
+    const songs = (sourceSetlist ?? []).filter((song) => song.title?.trim())
     if (songs.length === 0) return { success: false, message: 'A sugestão não possui músicas para enviar à escala.' }
 
     const today = new Date().toISOString().slice(0, 10)
