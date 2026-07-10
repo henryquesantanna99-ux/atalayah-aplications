@@ -41,7 +41,7 @@ type View = 'home' | 'suggest' | 'vote'
 
 const categories = ['Prévia', 'Celebração', 'Adoração', 'Não sei informar']
 const worshipTypes = ['Necessidade / clamor / entrega', 'Resposta / direção / declaração', 'Os dois', 'Não sei informar']
-const spiritualAreas = ['Arrependimento e mudança de vida', 'Fé e confiança em Deus', 'Consolo e cura interior', 'Gratidão e adoração', 'Entrega e rendição', 'Direção para uma decisão', 'Renovo espiritual', 'Não consegui perceber claramente', 'Outro']
+const heartExperienceOptions = ['Senti consolo de Deus', 'Senti direção para uma decisão', 'Senti confronto e arrependimento', 'Senti esperança e fé', 'Senti gratidão e adoração', 'Senti desejo de voltar para Deus', 'Senti desejo de servir', 'Senti necessidade de cura', 'Prefiro não responder']
 const nextSteps = ['Orar mais sobre isso', 'Conversar com alguém da liderança', 'Buscar reconciliação com alguém', 'Voltar a congregar com mais constância', 'Servir em alguma área', 'Estudar mais a Palavra', 'Pedir ajuda pastoral', 'Ainda não sei', 'Outro']
 const wizardSteps = ['Quem indica', 'Escolha da música', 'Confirmação', 'Leitura espiritual', 'Revisão']
 
@@ -54,8 +54,8 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
   const [isPending, startTransition] = useTransition()
   const [suggestion, setSuggestion] = useState(emptySuggestion)
   const [step, setStep] = useState(0)
-  const [youtubeQuery, setYoutubeQuery] = useState('')
   const [youtubeResults, setYoutubeResults] = useState<YouTubeOption[]>([])
+  const [pendingYoutubeSelection, setPendingYoutubeSelection] = useState<YouTubeOption | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [filters, setFilters] = useState({ search: '', category: 'Todas', type: 'Todos' })
   const [voteSong, setVoteSong] = useState<Song | null>(null)
@@ -72,12 +72,12 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
     if (step === 0) return Boolean(suggestion.nome.trim() && suggestion.tribo.trim() && suggestion.telefone.trim())
     if (step === 1) return Boolean(suggestion.youtube_video_id || suggestion.musica.trim())
     if (step === 2) return Boolean(suggestion.musica.trim())
-    if (step === 3) return Boolean(suggestion.spiritual_area && suggestion.next_step)
+    if (step === 3) return Boolean(suggestion.motivo.trim() && suggestion.spiritual_area.trim() && suggestion.next_step)
     return true
   }, [step, suggestion])
 
   async function searchYoutube() {
-    const query = youtubeQuery.trim() || [suggestion.musica, suggestion.artista].filter(Boolean).join(' ')
+    const query = [suggestion.musica, suggestion.artista].filter(Boolean).join(' ').trim()
     if (!query) return toast.error('Digite o nome da música para buscar.')
     setIsSearching(true)
     try {
@@ -85,6 +85,7 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Não foi possível buscar no YouTube.')
       setYoutubeResults(data.results ?? [])
+      setPendingYoutubeSelection(null)
       if ((data.results ?? []).length === 0) toast.message('Nenhum resultado encontrado. Você ainda pode informar a música manualmente.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível buscar no YouTube.')
@@ -94,7 +95,14 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
   }
 
   function selectYoutube(result: YouTubeOption) {
+    setPendingYoutubeSelection(result)
+  }
+
+  function confirmYoutubeSelection() {
+    if (!pendingYoutubeSelection) return
+    const result = pendingYoutubeSelection
     setSuggestion({ ...suggestion, musica: result.title, artista: result.artist, youtube_video_id: result.videoId, youtube_title: result.title, youtube_channel: result.artist, youtube_thumbnail: result.thumbnail ?? '', youtube_duration: result.duration ?? '', youtube_url: result.url })
+    setPendingYoutubeSelection(null)
     setStep(2)
   }
 
@@ -105,7 +113,7 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
         toast.success(response.message)
         setSuggestion(emptySuggestion)
         setYoutubeResults([])
-        setYoutubeQuery('')
+        setPendingYoutubeSelection(null)
         setStep(0)
         setView('home')
       } else toast.error(response.message)
@@ -129,11 +137,11 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
         <p className="text-sm text-[#CBD5E1]">Etapa {step + 1} de {wizardSteps.length}</p>
       </div>
       <WizardProgress activeStep={step} />
-      <div className="mt-7 rounded-2xl border border-white/10 bg-black/20 p-4 transition-all duration-300 sm:p-5">
+      <div key={step} className="mt-7 rounded-2xl border border-white/10 bg-black/20 p-4 transition-all duration-300 animate-in fade-in slide-in-from-right-4 sm:p-5">
         {step === 0 && <div className="grid gap-4 sm:grid-cols-2"><Field label="Nome completo *" value={suggestion.nome} onChange={(nome) => setSuggestion({ ...suggestion, nome })} /><Field label="Tribo / Grupo / Ministério *" value={suggestion.tribo} onChange={(tribo) => setSuggestion({ ...suggestion, tribo })} /><Field label="Telefone / WhatsApp *" value={suggestion.telefone} onChange={(telefone) => setSuggestion({ ...suggestion, telefone })} inputMode="tel" /><SelectField label="Faixa etária" value={suggestion.faixaEtaria} options={['Até 17 anos', '18 a 25 anos', '26 a 35 anos', '36 a 50 anos', 'Acima de 50 anos']} onChange={(faixaEtaria) => setSuggestion({ ...suggestion, faixaEtaria })} /><Field label="Ministério em que serve, se houver" value={suggestion.ministerio} onChange={(ministerio) => setSuggestion({ ...suggestion, ministerio })} /></div>}
-        {step === 1 && <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-2"><Field label="Nome da música" value={suggestion.musica} onChange={(musica) => setSuggestion({ ...suggestion, musica })} /><Field label="Artista / Ministério / Referência" value={suggestion.artista} onChange={(artista) => setSuggestion({ ...suggestion, artista })} /></div><div className="flex flex-col gap-3 sm:flex-row"><Input className="h-12 border-white/10 bg-black/20 text-white" placeholder="Buscar no YouTube" value={youtubeQuery} onChange={(e) => setYoutubeQuery(e.target.value)} /><Button type="button" disabled={isSearching} onClick={searchYoutube} className="h-12 bg-brand hover:bg-brand/90"><Search className="h-4 w-4" />{isSearching ? 'Buscando...' : 'Buscar opções'}</Button></div><div className="grid gap-3">{youtubeResults.map((result) => <button key={result.videoId} type="button" onClick={() => selectYoutube(result)} className="flex gap-3 rounded-xl border border-white/10 bg-navy-800/60 p-3 text-left transition hover:border-brand/50">{result.thumbnail && <img src={result.thumbnail} alt="" className="h-20 w-28 rounded-lg object-cover" />}<span className="min-w-0"><span className="block font-semibold text-white">{result.title}</span><span className="block text-sm text-[#94A3B8]">{result.artist}{result.duration ? ` · ${result.duration}` : ''}</span></span></button>)}</div></div>}
+        {step === 1 && <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-2"><Field label="Nome da música" value={suggestion.musica} onChange={(musica) => setSuggestion({ ...suggestion, musica })} /><Field label="Artista / Ministério / Referência" value={suggestion.artista} onChange={(artista) => setSuggestion({ ...suggestion, artista })} /></div><div className="rounded-2xl border border-white/10 bg-navy-800/60 p-4"><p className="text-sm text-[#CBD5E1]">Vamos pesquisar usando o nome da música e o artista acima. Se nenhuma opção for a correta, ajuste esses campos e pesquise novamente.</p><Button type="button" disabled={isSearching || !suggestion.musica.trim()} onClick={searchYoutube} className="mt-4 h-12 w-full bg-brand hover:bg-brand/90 sm:w-auto"><Search className="h-4 w-4" />{isSearching ? 'Buscando...' : 'Buscar opções no YouTube'}</Button></div>{youtubeResults.length > 0 && <div className="space-y-3"><p className="text-sm font-semibold text-white">Alguma dessas é a música? Se não for, pesquise novamente com outros termos.</p><div className="grid gap-3">{youtubeResults.map((result) => <button key={result.videoId} type="button" onClick={() => selectYoutube(result)} className={`flex gap-3 rounded-xl border p-3 text-left transition hover:border-brand/50 ${pendingYoutubeSelection?.videoId === result.videoId ? 'border-brand/60 bg-brand/10' : 'border-white/10 bg-navy-800/60'}`}>{result.thumbnail && <img src={result.thumbnail} alt="" className="h-20 w-28 rounded-lg object-cover" />}<span className="min-w-0"><span className="block font-semibold text-white">{result.title}</span><span className="block text-sm text-[#94A3B8]">{result.artist}{result.duration ? ` · ${result.duration}` : ''}</span></span></button>)}</div></div>}{pendingYoutubeSelection && <div className="rounded-2xl border border-brand/30 bg-brand/10 p-4"><p className="text-sm text-[#CBD5E1]">Continuar com <span className="font-semibold text-white">{pendingYoutubeSelection.title}</span>?</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Button type="button" onClick={confirmYoutubeSelection} className="bg-brand hover:bg-brand/90"><Check className="h-4 w-4" />Confirmar</Button><Button type="button" variant="outline" onClick={() => setPendingYoutubeSelection(null)} className="border-white/10 bg-transparent text-white hover:bg-white/10">Cancelar</Button></div></div>}</div>}
         {step === 2 && <div className="space-y-4"><div className="rounded-2xl border border-brand/30 bg-brand/10 p-4"><p className="text-sm text-brand">Música selecionada</p><h3 className="mt-2 text-xl font-bold text-white">{suggestion.musica || 'Informe a música manualmente'}</h3><p className="text-[#CBD5E1]">{suggestion.artista || 'Artista não informado'}</p>{suggestion.youtube_url && <a href={suggestion.youtube_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-brand"><ExternalLink className="h-4 w-4" />Abrir referência</a>}</div><div className="grid gap-4 sm:grid-cols-2"><SelectField label="Categoria sugerida" value={suggestion.categoriaSugerida} options={categories} onChange={(categoriaSugerida) => setSuggestion({ ...suggestion, categoriaSugerida })} /><SelectField label="Expressa mais" value={suggestion.tipoLouvor} options={worshipTypes} onChange={(tipoLouvor) => setSuggestion({ ...suggestion, tipoLouvor })} /></div></div>}
-        {step === 3 && <div className="grid gap-4"><TextareaField label="Por que você está indicando essa música?" value={suggestion.motivo} onChange={(motivo) => setSuggestion({ ...suggestion, motivo })} /><SelectField label="Durante o louvor e a ministração, em qual área você percebeu que Deus mais trabalhou no seu coração hoje?" value={suggestion.spiritual_area} options={spiritualAreas} onChange={(spiritual_area) => setSuggestion({ ...suggestion, spiritual_area, spiritual_area_other: spiritual_area === 'Outro' ? suggestion.spiritual_area_other : '' })} />{suggestion.spiritual_area === 'Outro' && <Field label="Conte em qual área Deus trabalhou" value={suggestion.spiritual_area_other} onChange={(spiritual_area_other) => setSuggestion({ ...suggestion, spiritual_area_other })} />}<TextareaField label="Se quiser, conte brevemente o que aconteceu no seu coração." value={suggestion.spiritual_experience_note} onChange={(spiritual_experience_note) => setSuggestion({ ...suggestion, spiritual_experience_note })} /><SelectField label="Qual próximo passo você sente que precisa dar depois do culto de hoje?" value={suggestion.next_step} options={nextSteps} onChange={(next_step) => setSuggestion({ ...suggestion, next_step, next_step_other: next_step === 'Outro' ? suggestion.next_step_other : '' })} />{suggestion.next_step === 'Outro' && <Field label="Descreva o próximo passo" value={suggestion.next_step_other} onChange={(next_step_other) => setSuggestion({ ...suggestion, next_step_other })} />}</div>}
+        {step === 3 && <div className="grid gap-4"><TextareaField label="Por que você está indicando essa música? *" value={suggestion.motivo} onChange={(motivo) => setSuggestion({ ...suggestion, motivo })} /><TextareaField label="Durante o louvor e a ministração, em qual área você percebeu que Deus mais trabalhou no seu coração hoje? *" value={suggestion.spiritual_area} onChange={(spiritual_area) => setSuggestion({ ...suggestion, spiritual_area })} /><SelectField label="Se quiser, conte brevemente o que aconteceu no seu coração." value={suggestion.spiritual_experience_note} options={heartExperienceOptions} onChange={(spiritual_experience_note) => setSuggestion({ ...suggestion, spiritual_experience_note })} /><SelectField label="Qual próximo passo você sente que precisa dar depois do culto de hoje? *" value={suggestion.next_step} options={nextSteps} onChange={(next_step) => setSuggestion({ ...suggestion, next_step, next_step_other: next_step === 'Outro' ? suggestion.next_step_other : '' })} />{suggestion.next_step === 'Outro' && <Field label="Descreva o próximo passo" value={suggestion.next_step_other} onChange={(next_step_other) => setSuggestion({ ...suggestion, next_step_other })} />}</div>}
         {step === 4 && <Review suggestion={suggestion} />}
       </div>
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-between"><Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep((current) => Math.max(0, current - 1))} className="border-white/10 bg-transparent text-white hover:bg-white/10"><ArrowLeft className="h-4 w-4" />Voltar etapa</Button>{step < 4 ? <Button type="button" disabled={!canAdvance} onClick={() => setStep((current) => Math.min(4, current + 1))} className="bg-brand hover:bg-brand/90">Avançar<ArrowRight className="h-4 w-4" /></Button> : <Button type="button" disabled={isPending} onClick={submitSuggestion} className="bg-brand hover:bg-brand/90"><Send className="h-4 w-4" />{isPending ? 'Enviando...' : 'Enviar indicação'}</Button>}</div>
@@ -149,7 +157,7 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
 
 function MemberLoginBar() { return <div className="sticky top-3 z-20 flex flex-col gap-3 rounded-2xl border border-white/10 bg-navy-900/95 p-3 shadow-xl shadow-black/30 backdrop-blur sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-white">Área de membros da igreja</p><p className="text-sm text-[#94A3B8]">Entre para acompanhar seu histórico, ou role a tela e indique sem login.</p></div><div className="flex gap-2"><Button asChild variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10"><Link href="/login"><LogIn className="h-4 w-4" />Entrar</Link></Button><Button asChild className="bg-brand hover:bg-brand/90"><Link href="/login?mode=register"><UserPlus className="h-4 w-4" />Criar conta</Link></Button></div></div> }
 function WizardProgress({ activeStep }: { activeStep: number }) { return <ol className="grid gap-2 sm:grid-cols-5">{wizardSteps.map((item, index) => <li key={item} className={`rounded-xl border p-3 text-xs transition ${index === activeStep ? 'border-brand/60 bg-brand/15 text-white' : index < activeStep ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-black/20 text-[#94A3B8]'}`}><span className="mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/10">{index < activeStep ? <Check className="h-3 w-3" /> : index + 1}</span>{item}</li>)}</ol> }
-function Review({ suggestion }: { suggestion: typeof emptySuggestion }) { const rows = [['Nome', suggestion.nome], ['Tribo', suggestion.tribo], ['Telefone', suggestion.telefone], ['Música', suggestion.musica], ['Artista/canal', suggestion.artista], ['Área percebida', suggestion.spiritual_area], ['Próximo passo', suggestion.next_step]]; return <div className="space-y-3"><h3 className="text-xl font-bold text-white">Revise sua indicação</h3>{rows.map(([label, value]) => <p key={label} className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-[#CBD5E1]"><span className="font-semibold text-white">{label}:</span> {value || 'Não informado'}</p>)}<p className="text-sm text-[#94A3B8]">Depois do envio, a equipe poderá cruzar letra, metadados e respostas com a visão ministerial para sugerir repertório.</p></div> }
+function Review({ suggestion }: { suggestion: typeof emptySuggestion }) { const rows = [['Nome', suggestion.nome], ['Tribo', suggestion.tribo], ['Telefone', suggestion.telefone], ['Música', suggestion.musica], ['Artista/canal', suggestion.artista], ['Área percebida', suggestion.spiritual_area], ['Próximo passo', suggestion.next_step]]; return <div className="space-y-3"><h3 className="text-xl font-bold text-white">Revise sua indicação</h3>{rows.map(([label, value]) => <p key={label} className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-[#CBD5E1]"><span className="font-semibold text-white">{label}:</span> {value || 'Não informado'}</p>)}<p className="text-sm text-[#94A3B8]">Depois do envio, sua indicação será considerada de forma coletiva para apoiar o discernimento da liderança; o sistema não avalia pessoas individualmente.</p></div> }
 function getTitle(song: Song) { return song.song_title ?? song.musica ?? 'Música sem título' }
 function getCategory(song: Song) { return song.category ?? song.categoria ?? 'Não informada' }
 function getType(song: Song) { const type = song.worship_type ?? song.tipoLouvor ?? 'Ambos'; return type === 'Os dois' ? 'Ambos' : type }

@@ -7,8 +7,32 @@ import { generateText } from 'ai'
 import { openai } from '@/lib/openai'
 import { findBestLyrics } from '@/lib/music/lrclib'
 import { searchSoundchartsSong } from '@/lib/music/soundcharts'
+import { classifySuggestionExpression, summarizeCollectivePatterns } from '@/lib/spiritual-intelligence/daily-analysis'
 
 type AdminResponse<T = unknown> = { success: boolean; message: string; data?: T }
+type SpiritualSummaryRow = { id: string; run_id: string; analysis_date: string; quantification: Record<string, unknown>; segmentation: unknown[]; associations: unknown[]; evolution: Record<string, unknown>; discernment: string[]; recommendations: string[]; charts_payload: Record<string, unknown>; created_at: string }
+
+type WorshipSuggestionRow = {
+  id: string
+  created_at: string
+  name: string
+  tribe: string
+  phone: string | null
+  song_title: string
+  artist: string | null
+  youtube_link: string | null
+  suggested_category: string | null
+  worship_type: string | null
+  reason: string | null
+  spiritual_area: string | null
+  spiritual_area_other: string | null
+  spiritual_experience_note: string | null
+  next_step: string | null
+  next_step_other: string | null
+  status: string
+  lyrics_plain?: string | null
+  metadata_payload?: Record<string, unknown> | null
+}
 
 type WorshipSuggestionRow = {
   id: string
@@ -61,7 +85,7 @@ async function requireWorshipAdmin() {
 export async function listarAdministracaoLouvor() {
   const { supabase } = await requireWorshipAdmin()
 
-  const [suggestions, votingSongs, catalog, repertoireSuggestions, upcomingEvents] = await Promise.all([
+  const [suggestions, votingSongs, catalog, repertoireSuggestions, upcomingEvents, spiritualSummaries] = await Promise.all([
     supabase
       .from('worship_song_suggestions' as never)
       .select('*')
@@ -87,6 +111,11 @@ export async function listarAdministracaoLouvor() {
       .gte('date', new Date().toISOString().slice(0, 10))
       .order('date', { ascending: true })
       .limit(12),
+    supabase
+      .from('spiritual_intelligence_daily_summaries' as never)
+      .select('*')
+      .order('analysis_date', { ascending: false })
+      .limit(20),
   ])
 
   return {
@@ -94,6 +123,7 @@ export async function listarAdministracaoLouvor() {
     votingSongs: votingSongs.data ?? [],
     repertoireSuggestions: repertoireSuggestions.data ?? [],
     upcomingEvents: upcomingEvents.data ?? [],
+    spiritualSummaries: (spiritualSummaries.data ?? []) as unknown as SpiritualSummaryRow[],
     catalog: ((catalog.data ?? []) as unknown as CatalogRow[]).map((item) => ({
       id: item.id,
       title: item.songs?.title ?? 'Música sem título',
@@ -333,6 +363,191 @@ export async function gerarAnaliseIndicacao(id: string): Promise<AdminResponse> 
   }
 }
 
+
+async function enrichSuggestionIfNeeded(supabase: Awaited<ReturnType<typeof createClient>>, suggestion: WorshipSuggestionRow) {
+  if (suggestion.lyrics_plain && suggestion.metadata_payload) return suggestion
+
+  const [lyrics, soundcharts] = await Promise.all([
+    suggestion.lyrics_plain ? Promise.resolve(null) : findBestLyrics({ trackName: suggestion.song_title, artistName: suggestion.artist }).catch((error) => {
+      console.warn('LRCLIB daily analysis enrichment failed', error)
+      return null
+    }),
+    suggestion.metadata_payload ? Promise.resolve(null) : searchSoundchartsSong({ title: suggestion.song_title, artist: suggestion.artist }).catch((error) => {
+      console.warn('Soundcharts daily analysis enrichment failed', error)
+      return null
+    }),
+  ])
+
+  const patch: Record<string, unknown> = {}
+  if (lyrics) {
+    patch.lyrics_plain = lyrics.plainLyrics ?? null
+    patch.lyrics_synced = lyrics.syncedLyrics ?? null
+    patch.lyrics_source = 'lrclib'
+    patch.lyrics_confidence = 0.75
+    patch.lyrics_fetched_at = new Date().toISOString()
+  }
+  if (soundcharts) {
+    patch.metadata_source = 'soundcharts'
+    patch.metadata_payload = { soundcharts, enriched_at: new Date().toISOString() }
+    patch.metadata_fetched_at = new Date().toISOString()
+  }
+
+  if (Object.keys(patch).length > 0) {
+    await supabase.from('worship_song_suggestions' as never).update(patch as never).eq('id', suggestion.id)
+  }
+
+  return { ...suggestion, ...patch } as WorshipSuggestionRow
+}
+
+
+async function buildAiCollectiveClassifications(suggestions: WorshipSuggestionRow[]) {
+  const fallback = suggestions.map(classifySuggestionExpression)
+  if (!process.env.OPENAI_API_KEY) return fallback
+
+  const compactInput = suggestions.map((suggestion) => ({
+    id: suggestion.id,
+    musica: suggestion.song_title,
+    artista: suggestion.artist,
+    letra: suggestion.lyrics_plain?.slice(0, 2500) ?? null,
+    motivo: suggestion.reason,
+    area_trabalhada: suggestion.spiritual_area,
+    experiencia: suggestion.spiritual_experience_note,
+    proximo_passo: suggestion.next_step_other || suggestion.next_step,
+    segmentos: {
+      tribo: suggestion.tribe,
+      faixaEtaria: (suggestion as WorshipSuggestionRow & { age_range?: string | null }).age_range,
+      ministerio: (suggestion as WorshipSuggestionRow & { ministry?: string | null }).ministry,
+    },
+  }))
+
+  const prompt = `Responda apenas em JSON válido no formato {"classifications":[]}. Classifique cada indicação como expressão espiritual coletiva, sem diagnosticar pessoas e sem inferir necessidades apenas pela letra. Para cada item, retorne: suggestionId, songTitle, themes, needs, emotions, nextSteps, convictions, evidence, segments. Use somente padrões descritivos e linguagem de apoio ao discernimento pastoral. Dados: ${JSON.stringify(compactInput)}`
+
+  try {
+    const result = await generateText({
+      model: openai(process.env.OPENAI_ANALYSIS_MODEL || 'gpt-4o-mini'),
+      prompt,
+    })
+    const parsed = JSON.parse(result.text) as { classifications?: Array<Record<string, unknown>> }
+    if (!Array.isArray(parsed.classifications) || parsed.classifications.length === 0) return fallback
+    return fallback.map((item) => {
+      const aiItem = parsed.classifications?.find((classification) => classification.suggestionId === item.suggestionId)
+      if (!aiItem) return item
+      return {
+        ...item,
+        themes: Array.isArray(aiItem.themes) ? aiItem.themes.map(String).slice(0, 6) : item.themes,
+        needs: Array.isArray(aiItem.needs) ? aiItem.needs.map(String).slice(0, 6) : item.needs,
+        emotions: Array.isArray(aiItem.emotions) ? aiItem.emotions.map(String).slice(0, 6) : item.emotions,
+        nextSteps: Array.isArray(aiItem.nextSteps) ? aiItem.nextSteps.map(String).slice(0, 6) : item.nextSteps,
+        convictions: Array.isArray(aiItem.convictions) ? aiItem.convictions.map(String).slice(0, 6) : item.convictions,
+        evidence: Array.isArray(aiItem.evidence) ? aiItem.evidence.map(String).slice(0, 6) : item.evidence,
+      }
+    })
+  } catch (error) {
+    console.error('buildAiCollectiveClassifications fallback', error)
+    return fallback
+  }
+}
+
+export async function gerarAnaliseEspiritualDoDia(dateKey: string): Promise<AdminResponse> {
+  try {
+    const { supabase, user } = await requireWorshipAdmin()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return { success: false, message: 'Selecione uma data válida para análise.' }
+
+    const start = `${dateKey}T00:00:00.000Z`
+    const endDate = new Date(`${dateKey}T00:00:00.000Z`)
+    endDate.setUTCDate(endDate.getUTCDate() + 1)
+
+    const { data, error } = await supabase
+      .from('worship_song_suggestions' as never)
+      .select('*')
+      .gte('created_at', start)
+      .lt('created_at', endDate.toISOString())
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+    const suggestions = (data ?? []) as unknown as WorshipSuggestionRow[]
+    if (suggestions.length === 0) return { success: false, message: 'Nenhuma indicação encontrada para este dia.' }
+
+    const ministryProfile = await getLatestMinistryProfile(supabase)
+    const enriched = await Promise.all(suggestions.map((suggestion) => enrichSuggestionIfNeeded(supabase, suggestion)))
+    const classifications = await buildAiCollectiveClassifications(enriched)
+
+    const { count: previousCount } = await supabase
+      .from('spiritual_intelligence_daily_summaries' as never)
+      .select('id', { count: 'exact', head: true })
+      .lt('analysis_date', dateKey)
+
+    const summary = summarizeCollectivePatterns(classifications, previousCount ?? 0)
+    const modelUsed = process.env.OPENAI_API_KEY ? process.env.OPENAI_ANALYSIS_MODEL || 'gpt-4o-mini' : 'collective-heuristic'
+
+    const { data: run, error: runError } = await supabase
+      .from('spiritual_intelligence_runs' as never)
+      .insert({
+        analysis_date: dateKey,
+        status: 'completed',
+        suggestions_count: suggestions.length,
+        ministry_profile_id: ministryProfile?.id || null,
+        model_used: modelUsed,
+        created_by: user.id,
+        completed_at: new Date().toISOString(),
+      } as never)
+      .select('id')
+      .single()
+
+    if (runError) throw runError
+    const runId = (run as unknown as { id: string }).id
+
+    const { error: classificationError } = await supabase
+      .from('spiritual_intelligence_classifications' as never)
+      .insert(classifications.map((item) => ({
+        run_id: runId,
+        suggestion_id: item.suggestionId,
+        classification: item,
+        evidence: item.evidence,
+        model_used: modelUsed,
+      })) as never)
+
+    if (classificationError) throw classificationError
+
+    const chartsPayload = {
+      themes: summary.quantification.themes,
+      needs: summary.quantification.needs,
+      emotions: summary.quantification.emotions,
+      nextSteps: summary.quantification.nextSteps,
+      segments: summary.segmentation,
+      associations: summary.associations,
+    }
+
+    const { error: summaryError } = await supabase
+      .from('spiritual_intelligence_daily_summaries' as never)
+      .insert({
+        run_id: runId,
+        analysis_date: dateKey,
+        quantification: summary.quantification,
+        segmentation: summary.segmentation,
+        associations: summary.associations,
+        evolution: summary.evolution,
+        discernment: summary.discernment,
+        recommendations: summary.recommendations,
+        charts_payload: chartsPayload,
+      } as never)
+
+    if (summaryError) throw summaryError
+
+    await supabase
+      .from('worship_song_suggestions' as never)
+      .update({ status: 'Analisada coletivamente' } as never)
+      .gte('created_at', start)
+      .lt('created_at', endDate.toISOString())
+
+    revalidatePath('/louvor-admin')
+    return { success: true, message: `Análise coletiva de ${suggestions.length} indicação${suggestions.length === 1 ? '' : 'ões'} gerada para ${dateKey}.` }
+  } catch (error) {
+    console.error('gerarAnaliseEspiritualDoDia', error)
+    return { success: false, message: 'Não foi possível gerar a análise coletiva do dia.' }
+  }
+}
+
 export async function criarSugestaoRepertorio(): Promise<AdminResponse> {
   try {
     const { supabase } = await requireWorshipAdmin()
@@ -340,7 +555,7 @@ export async function criarSugestaoRepertorio(): Promise<AdminResponse> {
     const { data: suggestions, error } = await supabase
       .from('worship_song_suggestions' as never)
       .select('*')
-      .in('status', ['Analisada', 'Aprovada', 'Em teste', 'Repertório oficial'])
+      .in('status', ['Analisada coletivamente', 'Analisada', 'Aprovada', 'Em teste', 'Repertório oficial'])
       .order('created_at', { ascending: false })
       .limit(8)
 
