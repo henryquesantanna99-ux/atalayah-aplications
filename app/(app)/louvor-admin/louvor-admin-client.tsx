@@ -1,14 +1,14 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { CheckCircle2, ExternalLink, Folder, LayoutGrid, List, Music2, Plus, RefreshCw } from 'lucide-react'
+import { ArrowDown, ArrowUp, BarChart3, CalendarPlus, CheckCircle2, ExternalLink, Folder, LayoutGrid, List, Music2, Plus, RefreshCw, Sparkles, Vote } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { atualizarMusicaVotacao, atualizarStatusIndicacao, enviarMusicaParaVotacao } from './actions'
+import { adicionarIndicacaoAoRepertorio, adicionarSugestaoRepertorioNaProximaEscala, atualizarMusicaVotacao, atualizarStatusIndicacao, criarSugestaoRepertorio, enviarMusicaParaVotacao, gerarAnaliseEspiritualDoDia } from './actions'
 
 type Suggestion = {
   id: string
@@ -28,6 +28,10 @@ type Suggestion = {
   next_step: string | null
   next_step_other: string | null
   status: string
+  youtube_url?: string | null
+  youtube_thumbnail?: string | null
+  age_range?: string | null
+  ministry?: string | null
 }
 
 type VotingSong = {
@@ -43,6 +47,43 @@ type VotingSong = {
   average_rating: number | null
 }
 
+type RepertoireSuggestion = {
+  id: string
+  title: string
+  pastoral_direction: string | null
+  suggested_setlist: DraftSetlistSong[] | null
+  status: string | null
+  created_at: string
+}
+
+type DraftSetlistSong = {
+  title?: string
+  artist?: string | null
+  moment?: string | null
+  reason?: string
+  youtube_url?: string | null
+}
+
+type UpcomingEvent = {
+  id: string
+  title: string
+  date: string
+}
+
+type SpiritualSummary = {
+  id: string
+  analysis_date: string
+  quantification: { themes?: MetricCount[]; needs?: MetricCount[]; emotions?: MetricCount[]; nextSteps?: MetricCount[] }
+  segmentation: Array<{ segment: string; value: string; total: number; topThemes?: MetricCount[] }>
+  associations: Array<{ source: string; target: string; count: number; description: string }>
+  evolution: { note?: string; comparedDays?: number }
+  discernment: string[]
+  recommendations: string[]
+  created_at: string
+}
+
+type MetricCount = { label: string; count: number; percentage: number }
+
 type CatalogSong = {
   id: string
   title: string
@@ -54,23 +95,33 @@ type CatalogSong = {
 const moments = ['Prévia', 'Adoração', 'Palavra', 'Celebração']
 const worshipTypes = ['Sacerdotal', 'Profético', 'Ambos']
 const songStatuses = ['Aprovada', 'Em teste', 'Repertório oficial', 'Pausada', 'Reprovada', 'Em análise', 'Necessita validação pastoral']
-const suggestionStatuses = ['Sugerida', 'Em análise', 'Aprovada', 'Em teste', 'Repertório oficial', 'Pausada', 'Reprovada', 'Necessita validação pastoral']
+const suggestionStatuses = ['Sugerida', 'Em análise', 'Analisada coletivamente', 'Analisada', 'Aprovada', 'Em teste', 'Repertório oficial', 'Pausada', 'Reprovada', 'Necessita validação pastoral']
+type AdminSection = 'votacao' | 'indicacoes' | 'inteligencia' | 'repertorios'
 
 export function LouvorAdminClient({
   suggestions,
   votingSongs,
   catalog,
+  repertoireSuggestions,
+  upcomingEvents,
+  spiritualSummaries = [],
 }: {
   suggestions: Suggestion[]
   votingSongs: VotingSong[]
   catalog: CatalogSong[]
+  repertoireSuggestions: RepertoireSuggestion[]
+  upcomingEvents: UpcomingEvent[]
+  spiritualSummaries?: SpiritualSummary[]
 }) {
   const [isPending, startTransition] = useTransition()
   const [selectedCatalogId, setSelectedCatalogId] = useState('manual')
   const selectedCatalog = useMemo(() => catalog.find((song) => song.id === selectedCatalogId), [catalog, selectedCatalogId])
   const [form, setForm] = useState({ songTitle: '', artist: '', youtubeLink: '', category: 'Adoração', worshipType: 'Ambos', theme: '' })
+  const [activeSection, setActiveSection] = useState<AdminSection>('indicacoes')
   const [suggestionView, setSuggestionView] = useState<'boards' | 'list'>('boards')
   const [selectedSuggestionDate, setSelectedSuggestionDate] = useState('')
+  const [selectedEventByRepertoire, setSelectedEventByRepertoire] = useState<Record<string, string>>({})
+  const [draftSetlistByRepertoire, setDraftSetlistByRepertoire] = useState<Record<string, DraftSetlistSong[]>>({})
   const groupedSuggestions = useMemo(() => groupSuggestionsByDate(suggestions), [suggestions])
   const activeSuggestionGroup = groupedSuggestions.find((group) => group.dateKey === selectedSuggestionDate) ?? groupedSuggestions[0]
   const activeSuggestionDate = activeSuggestionGroup?.dateKey ?? ''
@@ -113,6 +164,52 @@ export function LouvorAdminClient({
     })
   }
 
+  function runDailySpiritualAnalysis(dateKey: string) {
+    startTransition(async () => {
+      const response = await gerarAnaliseEspiritualDoDia(dateKey)
+      if (response.success) toast.success(response.message)
+      else toast.error(response.message)
+    })
+  }
+
+  function createRepertoireSuggestion() {
+    startTransition(async () => {
+      const response = await criarSugestaoRepertorio()
+      if (response.success) toast.success(response.message)
+      else toast.error(response.message)
+    })
+  }
+
+  function addSuggestionToCatalog(id: string) {
+    startTransition(async () => {
+      const response = await adicionarIndicacaoAoRepertorio(id)
+      if (response.success) toast.success(response.message)
+      else toast.error(response.message)
+    })
+  }
+
+  function addRepertoireToNextScale(id: string) {
+    startTransition(async () => {
+      const response = await adicionarSugestaoRepertorioNaProximaEscala(id, selectedEventByRepertoire[id] || null, draftSetlistByRepertoire[id])
+      if (response.success) toast.success(response.message)
+      else toast.error(response.message)
+    })
+  }
+
+  function getDraftSetlist(item: RepertoireSuggestion) {
+    return draftSetlistByRepertoire[item.id] ?? item.suggested_setlist ?? []
+  }
+
+  function moveDraftSong(item: RepertoireSuggestion, fromIndex: number, direction: -1 | 1) {
+    const current = getDraftSetlist(item)
+    const toIndex = fromIndex + direction
+    if (toIndex < 0 || toIndex >= current.length) return
+    const next = [...current]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    setDraftSetlistByRepertoire((drafts) => ({ ...drafts, [item.id]: next }))
+  }
+
   function updateSuggestion(id: string, status: string) {
     startTransition(async () => {
       const response = await atualizarStatusIndicacao(id, status)
@@ -125,7 +222,42 @@ export function LouvorAdminClient({
   }
 
   return <div className="space-y-6">
-    <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5">
+    <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div><Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Louvor Admin</Badge><h1 className="mt-2 text-2xl font-bold text-white">Gestão de louvor</h1><p className="text-sm text-[#94A3B8]">Votação, indicações, inteligência espiritual e repertórios agora ficam separados por menus internos.</p></div>
+        <div className="grid gap-2 sm:grid-cols-4">
+          <AdminTab active={activeSection === 'votacao'} icon={<Vote />} label="Votação" onClick={() => setActiveSection('votacao')} />
+          <AdminTab active={activeSection === 'indicacoes'} icon={<Folder />} label="Indicações" onClick={() => setActiveSection('indicacoes')} />
+          <AdminTab active={activeSection === 'inteligencia'} icon={<BarChart3 />} label="Inteligência" onClick={() => setActiveSection('inteligencia')} />
+          <AdminTab active={activeSection === 'repertorios'} icon={<Sparkles />} label="Repertórios" onClick={() => setActiveSection('repertorios')} />
+        </div>
+      </div>
+    </section>
+
+    {activeSection === 'repertorios' && <section className="rounded-2xl border border-brand/20 bg-gradient-to-br from-brand/15 to-navy-900 p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Análise ministerial</Badge>
+          <h2 className="mt-3 text-xl font-bold text-white">Sugestão de repertório por análise</h2>
+          <p className="mt-1 max-w-3xl text-sm text-[#CBD5E1]">Crie rascunhos de repertório a partir das análises coletivas e ajuste a ordem antes de enviar para uma escala.</p>
+        </div>
+        <Button disabled={isPending} onClick={createRepertoireSuggestion} className="h-11 bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />Criar sugestão de repertório</Button>
+      </div>
+      {repertoireSuggestions.length > 0 && <div className="mt-5 grid gap-3 lg:grid-cols-2">
+        {repertoireSuggestions.map((item) => <article key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+          <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-white">{item.title}</h3><p className="mt-1 text-sm text-[#94A3B8]">{item.pastoral_direction || 'Direção pastoral não informada'}</p></div><Badge variant="outline" className="border-white/10 text-[#CBD5E1]">{item.status || 'draft'}</Badge></div>
+          <div className="mt-3 space-y-2">{getDraftSetlist(item).slice(0, 5).map((song, index) => <div key={`${item.id}-${index}-${song.title}`} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2 text-sm text-[#CBD5E1]"><div className="flex min-w-0 flex-1 flex-col"><span className="truncate font-semibold text-white">{index + 1}. {song.title || 'Música sem título'}</span><span className="truncate text-xs text-[#94A3B8]">{song.artist || 'Sem artista'}{song.moment ? ` · ${song.moment}` : ''}</span></div><Button type="button" size="icon" variant="ghost" disabled={index === 0 || item.status === 'scheduled'} onClick={() => moveDraftSong(item, index, -1)} className="text-[#CBD5E1] hover:bg-white/10 hover:text-white"><ArrowUp className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" disabled={index === getDraftSetlist(item).length - 1 || item.status === 'scheduled'} onClick={() => moveDraftSong(item, index, 1)} className="text-[#CBD5E1] hover:bg-white/10 hover:text-white"><ArrowDown className="h-4 w-4" /></Button></div>)}</div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr,auto]">
+            <Select value={selectedEventByRepertoire[item.id] ?? 'auto'} onValueChange={(eventId) => setSelectedEventByRepertoire((current) => ({ ...current, [item.id]: eventId === 'auto' ? '' : eventId }))}>
+              <SelectTrigger className="border-white/10 bg-black/20 text-white"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="auto">Próximo culto automático</SelectItem>{upcomingEvents.map((event) => <SelectItem key={event.id} value={event.id}>{event.title} — {new Date(`${event.date}T00:00:00`).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button type="button" disabled={isPending || item.status === 'scheduled'} onClick={() => addRepertoireToNextScale(item.id)} className="bg-brand hover:bg-brand/90"><CalendarPlus className="h-4 w-4" />Adicionar</Button>
+          </div>
+        </article>)}
+      </div>}
+    </section>}
+    {activeSection === 'votacao' && <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5">
       <div className="flex items-start gap-3">
         <div className="rounded-2xl bg-brand/15 p-3 text-brand"><Plus className="h-5 w-5" /></div>
         <div>
@@ -141,10 +273,7 @@ export function LouvorAdminClient({
         <Field label="Tema" value={form.theme} onChange={(theme) => setForm({ ...form, theme })} />
         <Button disabled={isPending} className="h-11 bg-brand hover:bg-brand/90 lg:self-end"><CheckCircle2 className="h-4 w-4" />Abrir para votação</Button>
       </form>
-    </section>
-
-    <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5">
-      <h2 className="text-xl font-bold text-white">Músicas configuradas para votação</h2>
+      <div className="mt-6"><h2 className="text-xl font-bold text-white">Músicas configuradas para votação</h2>
       <div className="mt-4 grid gap-3">
         {votingSongs.map((song) => <article key={song.id} className="rounded-xl border border-white/[0.08] bg-black/20 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -159,10 +288,10 @@ export function LouvorAdminClient({
           </div>
         </article>)}
         {votingSongs.length === 0 && <p className="text-sm text-[#94A3B8]">Nenhuma música foi enviada para votação ainda.</p>}
-      </div>
-    </section>
+      </div></div>
+    </section>}
 
-    <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5">
+    {activeSection === 'indicacoes' && <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">Indicações recebidas</h2>
@@ -184,12 +313,37 @@ export function LouvorAdminClient({
         <div className="max-h-[620px] overflow-y-auto pr-1">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#94A3B8]">{activeSuggestionGroup?.label ?? 'Selecione uma pasta'}</h3>
           <div className={suggestionView === 'boards' ? 'grid gap-3 xl:grid-cols-2' : 'grid gap-3'}>
-            {(activeSuggestionGroup?.suggestions ?? []).map((suggestion) => <SuggestionCard key={suggestion.id} suggestion={suggestion} onStatusChange={updateSuggestion} />)}
+            {(activeSuggestionGroup?.suggestions ?? []).map((suggestion) => <SuggestionCard key={suggestion.id} suggestion={suggestion} isPending={isPending} onAddToCatalog={addSuggestionToCatalog} onStatusChange={updateSuggestion} />)}
           </div>
         </div>
       </div> : <p className="mt-4 text-sm text-[#94A3B8]">Nenhuma indicação recebida ainda.</p>}
-    </section>
+    </section>}
+
+    {activeSection === 'inteligencia' && <SpiritualIntelligencePanel groups={groupedSuggestions} summaries={spiritualSummaries} activeDate={activeSuggestionDate} isPending={isPending} onSelectDate={setSelectedSuggestionDate} onRunAnalysis={runDailySpiritualAnalysis} />}
   </div>
+}
+
+
+function AdminTab({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) {
+  return <Button type="button" variant={active ? 'default' : 'outline'} onClick={onClick} className={active ? 'justify-start bg-brand text-white hover:bg-brand/90' : 'justify-start border-white/10 bg-transparent text-white hover:bg-white/10'}><span className="[&_svg]:h-4 [&_svg]:w-4">{icon}</span>{label}</Button>
+}
+
+function SpiritualIntelligencePanel({ groups, summaries, activeDate, isPending, onSelectDate, onRunAnalysis }: { groups: ReturnType<typeof groupSuggestionsByDate>; summaries: SpiritualSummary[]; activeDate: string; isPending: boolean; onSelectDate: (date: string) => void; onRunAnalysis: (date: string) => void }) {
+  const activeGroup = groups.find((group) => group.dateKey === activeDate) ?? groups[0]
+  const activeSummary = summaries.find((summary) => summary.analysis_date === activeGroup?.dateKey) ?? summaries[0]
+  const summary = activeSummary
+  return <section className="grid gap-5 xl:grid-cols-[300px,1fr]">
+    <aside className="rounded-2xl border border-white/[0.08] bg-navy-900 p-4"><Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Análises por dia</Badge><h2 className="mt-3 text-xl font-bold text-white">Inteligência Espiritual</h2><p className="mt-1 text-sm text-[#94A3B8]">Uma análise coletiva por data. O sistema organiza evidências; o discernimento pertence à liderança.</p><div className="mt-4 grid gap-2">{groups.map((group) => <button key={group.dateKey} type="button" onClick={() => onSelectDate(group.dateKey)} className={`rounded-xl border p-3 text-left transition ${activeGroup?.dateKey === group.dateKey ? 'border-brand/50 bg-brand/10' : 'border-white/10 bg-black/20 hover:border-brand/30'}`}><p className="font-semibold text-white">{group.label}</p><p className="text-sm text-[#94A3B8]">{group.suggestions.length} indicação{group.suggestions.length === 1 ? '' : 'ões'}</p></button>)}</div></aside>
+    <div className="space-y-5"><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><h3 className="text-xl font-bold text-white">{activeGroup?.label ?? 'Sem data selecionada'}</h3><p className="mt-1 text-sm text-[#94A3B8]">Fluxo: letra da música + motivo + área trabalhada + próximo passo de todas as indicações do dia.</p></div><Button type="button" disabled={isPending || !activeGroup || activeGroup.dateKey === 'sem-data'} onClick={() => activeGroup && onRunAnalysis(activeGroup.dateKey)} className="bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />Gerar análise coletiva do dia</Button></div></section>{summary ? <DailySummary summary={summary} /> : <p className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5 text-sm text-[#94A3B8]">Ainda não há análise coletiva salva. Clique no botão acima para gerar o panorama do dia.</p>}</div>
+  </section>
+}
+
+function DailySummary({ summary }: { summary: SpiritualSummary }) {
+  return <div className="space-y-5"><section className="grid gap-4 lg:grid-cols-2"><MetricChart title="Temas espirituais" items={summary.quantification?.themes ?? []} /><MetricChart title="Necessidades" items={summary.quantification?.needs ?? []} /><MetricChart title="Emoções recorrentes" items={summary.quantification?.emotions ?? []} /><MetricChart title="Próximos passos" items={summary.quantification?.nextSteps ?? []} /></section><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Segmentação</h3><div className="mt-4 grid gap-3 md:grid-cols-2">{summary.segmentation?.slice(0, 8).map((item) => <div key={`${item.segment}-${item.value}`} className="rounded-xl border border-white/10 bg-black/20 p-3"><p className="font-semibold text-white">{item.segment}: {item.value}</p><p className="text-sm text-[#94A3B8]">{item.total} indicação{item.total === 1 ? '' : 'ões'}</p><p className="mt-2 text-xs text-[#CBD5E1]">{item.topThemes?.map((theme) => theme.label).join(', ') || 'Sem tema recorrente'}</p></div>)}</div></section><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Associações sem causalidade</h3><div className="mt-3 grid gap-2">{summary.associations?.map((item) => <p key={`${item.source}-${item.target}`} className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-[#CBD5E1]">{item.description}</p>)}</div></section><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Discernimento e resposta ministerial</h3><p className="mt-2 text-sm text-[#94A3B8]">{summary.evolution?.note}</p><div className="mt-4 grid gap-3 lg:grid-cols-2"><div>{summary.discernment?.map((item) => <p key={item} className="mb-2 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-[#CBD5E1]">{item}</p>)}</div><div>{summary.recommendations?.map((item) => <p key={item} className="mb-2 rounded-xl border border-brand/20 bg-brand/10 p-3 text-sm text-[#CBD5E1]">{item}</p>)}</div></div></section></div>
+}
+
+function MetricChart({ title, items }: { title: string; items: MetricCount[] }) {
+  return <article className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="font-bold text-white">{title}</h3><div className="mt-4 space-y-3">{items.length > 0 ? items.slice(0, 6).map((item) => <div key={item.label}><div className="mb-1 flex justify-between gap-3 text-sm"><span className="truncate text-[#CBD5E1]">{item.label}</span><span className="text-white">{item.count} · {item.percentage}%</span></div><div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-brand" style={{ width: `${Math.max(item.percentage, 6)}%` }} /></div></div>) : <p className="text-sm text-[#94A3B8]">Sem dados ainda.</p>}</div></article>
 }
 
 function groupSuggestionsByDate(suggestions: Suggestion[]) {
@@ -211,12 +365,12 @@ function groupSuggestionsByDate(suggestions: Suggestion[]) {
     }))
 }
 
-function SuggestionCard({ suggestion, onStatusChange }: { suggestion: Suggestion; onStatusChange: (id: string, status: string) => void }) {
+function SuggestionCard({ suggestion, isPending, onAddToCatalog, onStatusChange }: { suggestion: Suggestion; isPending: boolean; onAddToCatalog: (id: string) => void; onStatusChange: (id: string, status: string) => void }) {
   return (
     <article className="rounded-xl border border-white/[0.08] bg-black/20 p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1"><h3 className="font-semibold text-white"><Music2 className="mr-2 inline h-4 w-4 text-brand" />{suggestion.song_title}</h3><p className="break-words text-sm text-[#94A3B8]">{suggestion.artist || 'Sem artista'} · indicado por {suggestion.name} ({suggestion.tribe}){suggestion.phone ? ` · ${suggestion.phone}` : ''}</p><SuggestionAnalysis suggestion={suggestion} />{suggestion.reason && <p className="mt-2 break-words text-sm text-[#CBD5E1]">{suggestion.reason}</p>}<SpiritualResponse suggestion={suggestion} /></div>
-        <div className="flex flex-col gap-2 sm:flex-row">{suggestion.youtube_link && <Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button>}<Select value={suggestion.status} onValueChange={(status) => onStatusChange(suggestion.id, status)}><SelectTrigger className="w-full sm:w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
+        <div className="min-w-0 flex-1"><h3 className="font-semibold text-white"><Music2 className="mr-2 inline h-4 w-4 text-brand" />{suggestion.song_title}</h3><p className="break-words text-sm text-[#94A3B8]">{suggestion.artist || 'Sem artista'} · indicado por {suggestion.name} ({suggestion.tribe}){suggestion.phone ? ` · ${suggestion.phone}` : ''}</p><SuggestionAnalysis suggestion={suggestion} />{(suggestion.age_range || suggestion.ministry) && <p className="mt-2 text-xs text-[#94A3B8]">{suggestion.age_range || 'Faixa não informada'}{suggestion.ministry ? ` · ${suggestion.ministry}` : ''}</p>}{suggestion.reason && <p className="mt-2 break-words text-sm text-[#CBD5E1]">{suggestion.reason}</p>}<SpiritualResponse suggestion={suggestion} /></div>
+        <div className="flex flex-col gap-2 sm:flex-row"><Button type="button" disabled={isPending || suggestion.status === 'Repertório oficial'} onClick={() => onAddToCatalog(suggestion.id)} variant="outline" className="border-brand/30 bg-transparent text-brand hover:bg-brand/10"><Plus className="h-4 w-4" />Repertório</Button>{(suggestion.youtube_url || suggestion.youtube_link) && <Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_url || suggestion.youtube_link || '#'} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button>}<Select value={suggestion.status} onValueChange={(status) => onStatusChange(suggestion.id, status)}><SelectTrigger className="w-full sm:w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
       </div>
     </article>
   )
