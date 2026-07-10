@@ -56,6 +56,12 @@ type RepertoireSuggestion = {
   created_at: string
 }
 
+type UpcomingEvent = {
+  id: string
+  title: string
+  date: string
+}
+
 type CatalogSong = {
   id: string
   title: string
@@ -74,11 +80,13 @@ export function LouvorAdminClient({
   votingSongs,
   catalog,
   repertoireSuggestions,
+  upcomingEvents,
 }: {
   suggestions: Suggestion[]
   votingSongs: VotingSong[]
   catalog: CatalogSong[]
   repertoireSuggestions: RepertoireSuggestion[]
+  upcomingEvents: UpcomingEvent[]
 }) {
   const [isPending, startTransition] = useTransition()
   const [selectedCatalogId, setSelectedCatalogId] = useState('manual')
@@ -86,6 +94,7 @@ export function LouvorAdminClient({
   const [form, setForm] = useState({ songTitle: '', artist: '', youtubeLink: '', category: 'Adoração', worshipType: 'Ambos', theme: '' })
   const [suggestionView, setSuggestionView] = useState<'boards' | 'list'>('boards')
   const [selectedSuggestionDate, setSelectedSuggestionDate] = useState('')
+  const [selectedEventByRepertoire, setSelectedEventByRepertoire] = useState<Record<string, string>>({})
   const groupedSuggestions = useMemo(() => groupSuggestionsByDate(suggestions), [suggestions])
   const activeSuggestionGroup = groupedSuggestions.find((group) => group.dateKey === selectedSuggestionDate) ?? groupedSuggestions[0]
   const activeSuggestionDate = activeSuggestionGroup?.dateKey ?? ''
@@ -162,7 +171,7 @@ export function LouvorAdminClient({
 
   function addRepertoireToNextScale(id: string) {
     startTransition(async () => {
-      const response = await adicionarSugestaoRepertorioNaProximaEscala(id)
+      const response = await adicionarSugestaoRepertorioNaProximaEscala(id, selectedEventByRepertoire[id] || null)
       if (response.success) toast.success(response.message)
       else toast.error(response.message)
     })
@@ -193,7 +202,13 @@ export function LouvorAdminClient({
         {repertoireSuggestions.map((item) => <article key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
           <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-white">{item.title}</h3><p className="mt-1 text-sm text-[#94A3B8]">{item.pastoral_direction || 'Direção pastoral não informada'}</p></div><Badge variant="outline" className="border-white/10 text-[#CBD5E1]">{item.status || 'draft'}</Badge></div>
           <div className="mt-3 space-y-2">{(item.suggested_setlist ?? []).slice(0, 5).map((song, index) => <p key={`${item.id}-${index}`} className="text-sm text-[#CBD5E1]"><span className="font-semibold text-white">{index + 1}. {song.title || 'Música sem título'}</span>{song.artist ? ` — ${song.artist}` : ''}{song.moment ? ` · ${song.moment}` : ''}</p>)}</div>
-          <Button type="button" disabled={isPending || item.status === 'scheduled'} onClick={() => addRepertoireToNextScale(item.id)} className="mt-4 w-full bg-brand hover:bg-brand/90"><CalendarPlus className="h-4 w-4" />Adicionar à próxima escala</Button>
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr,auto]">
+            <Select value={selectedEventByRepertoire[item.id] ?? 'auto'} onValueChange={(eventId) => setSelectedEventByRepertoire((current) => ({ ...current, [item.id]: eventId === 'auto' ? '' : eventId }))}>
+              <SelectTrigger className="border-white/10 bg-black/20 text-white"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="auto">Próximo culto automático</SelectItem>{upcomingEvents.map((event) => <SelectItem key={event.id} value={event.id}>{event.title} — {new Date(`${event.date}T00:00:00`).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button type="button" disabled={isPending || item.status === 'scheduled'} onClick={() => addRepertoireToNextScale(item.id)} className="bg-brand hover:bg-brand/90"><CalendarPlus className="h-4 w-4" />Adicionar</Button>
+          </div>
         </article>)}
       </div>}
     </section>

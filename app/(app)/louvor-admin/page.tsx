@@ -17,6 +17,7 @@ export default async function LouvorAdminPage() {
           votingSongs={data.votingSongs as never[]}
           catalog={data.catalog}
           repertoireSuggestions={data.repertoireSuggestions as never[]}
+          upcomingEvents={data.upcomingEvents}
         />
       </div>
     </>

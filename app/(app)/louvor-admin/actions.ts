@@ -61,7 +61,7 @@ async function requireWorshipAdmin() {
 export async function listarAdministracaoLouvor() {
   const { supabase } = await requireWorshipAdmin()
 
-  const [suggestions, votingSongs, catalog, repertoireSuggestions] = await Promise.all([
+  const [suggestions, votingSongs, catalog, repertoireSuggestions, upcomingEvents] = await Promise.all([
     supabase
       .from('worship_song_suggestions' as never)
       .select('*')
@@ -80,12 +80,20 @@ export async function listarAdministracaoLouvor() {
       .select('*')
       .order('created_at', { ascending: false })
       .limit(5),
+    supabase
+      .from('events')
+      .select('id, title, date')
+      .eq('type', 'culto')
+      .gte('date', new Date().toISOString().slice(0, 10))
+      .order('date', { ascending: true })
+      .limit(12),
   ])
 
   return {
     suggestions: suggestions.data ?? [],
     votingSongs: votingSongs.data ?? [],
     repertoireSuggestions: repertoireSuggestions.data ?? [],
+    upcomingEvents: upcomingEvents.data ?? [],
     catalog: ((catalog.data ?? []) as unknown as CatalogRow[]).map((item) => ({
       id: item.id,
       title: item.songs?.title ?? 'Música sem título',
@@ -501,7 +509,7 @@ function nextSundayISO() {
   return date.toISOString().slice(0, 10)
 }
 
-export async function adicionarSugestaoRepertorioNaProximaEscala(id: string): Promise<AdminResponse> {
+export async function adicionarSugestaoRepertorioNaProximaEscala(id: string, selectedEventId?: string | null): Promise<AdminResponse> {
   try {
     const { supabase, user } = await requireWorshipAdmin()
     const { data: repertoire, error: repertoireError } = await supabase
@@ -520,20 +528,24 @@ export async function adicionarSugestaoRepertorioNaProximaEscala(id: string): Pr
     if (songs.length === 0) return { success: false, message: 'A sugestão não possui músicas para enviar à escala.' }
 
     const today = new Date().toISOString().slice(0, 10)
-    const { data: nextEvent, error: eventLookupError } = await supabase
+    const eventQuery = supabase
       .from('events')
       .select('id, title, date')
-      .eq('type', 'culto')
-      .gte('date', today)
-      .order('date', { ascending: true })
-      .limit(1)
-      .maybeSingle()
+
+    const { data: targetEvent, error: eventLookupError } = selectedEventId
+      ? await eventQuery.eq('id', selectedEventId).single()
+      : await eventQuery
+          .eq('type', 'culto')
+          .gte('date', today)
+          .order('date', { ascending: true })
+          .limit(1)
+          .maybeSingle()
 
     if (eventLookupError) throw eventLookupError
 
-    let eventId = nextEvent?.id
-    let eventTitle = nextEvent?.title ?? 'Culto sugerido pelo repertório'
-    let eventDate = nextEvent?.date ?? nextSundayISO()
+    let eventId = targetEvent?.id
+    let eventTitle = targetEvent?.title ?? 'Culto sugerido pelo repertório'
+    let eventDate = targetEvent?.date ?? nextSundayISO()
 
     if (!eventId) {
       const { data: createdEvent, error: createEventError } = await supabase
