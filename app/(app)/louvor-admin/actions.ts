@@ -34,6 +34,28 @@ type WorshipSuggestionRow = {
   metadata_payload?: Record<string, unknown> | null
 }
 
+type WorshipSuggestionRow = {
+  id: string
+  created_at: string
+  name: string
+  tribe: string
+  phone: string | null
+  song_title: string
+  artist: string | null
+  youtube_link: string | null
+  suggested_category: string | null
+  worship_type: string | null
+  reason: string | null
+  spiritual_area: string | null
+  spiritual_area_other: string | null
+  spiritual_experience_note: string | null
+  next_step: string | null
+  next_step_other: string | null
+  status: string
+  lyrics_plain?: string | null
+  metadata_payload?: Record<string, unknown> | null
+}
+
 type CatalogRow = {
   id: string
   artist: string | null
