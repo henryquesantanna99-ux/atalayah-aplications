@@ -13,12 +13,14 @@ import {
   Users,
   BookOpen,
   Headphones,
+  Church,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Geral' },
   { href: '/musicas', icon: Music, label: 'Músicas' },
   { href: '/louvor-admin', icon: Vote, label: 'Louvor' },
+  { href: '/seu-ministerio', icon: Church, label: 'Ministério' },
   { href: '/inscricoes', icon: ClipboardList, label: 'Inscrições' },
   { href: '/agenda', icon: CalendarDays, label: 'Agenda' },
   { href: '/estudo', icon: Headphones, label: 'Estudo' },

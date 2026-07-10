@@ -1,14 +1,14 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { CheckCircle2, ExternalLink, Folder, LayoutGrid, List, Music2, Plus, RefreshCw } from 'lucide-react'
+import { ArrowDown, ArrowUp, CalendarPlus, CheckCircle2, DatabaseZap, ExternalLink, Folder, LayoutGrid, List, Music2, Plus, RefreshCw, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { atualizarMusicaVotacao, atualizarStatusIndicacao, enviarMusicaParaVotacao } from './actions'
+import { adicionarIndicacaoAoRepertorio, adicionarSugestaoRepertorioNaProximaEscala, atualizarMusicaVotacao, atualizarStatusIndicacao, criarSugestaoRepertorio, enriquecerIndicacao, enviarMusicaParaVotacao, gerarAnaliseIndicacao } from './actions'
 
 type Suggestion = {
   id: string
@@ -28,6 +28,10 @@ type Suggestion = {
   next_step: string | null
   next_step_other: string | null
   status: string
+  youtube_url?: string | null
+  youtube_thumbnail?: string | null
+  age_range?: string | null
+  ministry?: string | null
 }
 
 type VotingSong = {
@@ -43,6 +47,29 @@ type VotingSong = {
   average_rating: number | null
 }
 
+type RepertoireSuggestion = {
+  id: string
+  title: string
+  pastoral_direction: string | null
+  suggested_setlist: DraftSetlistSong[] | null
+  status: string | null
+  created_at: string
+}
+
+type DraftSetlistSong = {
+  title?: string
+  artist?: string | null
+  moment?: string | null
+  reason?: string
+  youtube_url?: string | null
+}
+
+type UpcomingEvent = {
+  id: string
+  title: string
+  date: string
+}
+
 type CatalogSong = {
   id: string
   title: string
@@ -54,16 +81,20 @@ type CatalogSong = {
 const moments = ['Prévia', 'Adoração', 'Palavra', 'Celebração']
 const worshipTypes = ['Sacerdotal', 'Profético', 'Ambos']
 const songStatuses = ['Aprovada', 'Em teste', 'Repertório oficial', 'Pausada', 'Reprovada', 'Em análise', 'Necessita validação pastoral']
-const suggestionStatuses = ['Sugerida', 'Em análise', 'Aprovada', 'Em teste', 'Repertório oficial', 'Pausada', 'Reprovada', 'Necessita validação pastoral']
+const suggestionStatuses = ['Sugerida', 'Em análise', 'Analisada', 'Aprovada', 'Em teste', 'Repertório oficial', 'Pausada', 'Reprovada', 'Necessita validação pastoral']
 
 export function LouvorAdminClient({
   suggestions,
   votingSongs,
   catalog,
+  repertoireSuggestions,
+  upcomingEvents,
 }: {
   suggestions: Suggestion[]
   votingSongs: VotingSong[]
   catalog: CatalogSong[]
+  repertoireSuggestions: RepertoireSuggestion[]
+  upcomingEvents: UpcomingEvent[]
 }) {
   const [isPending, startTransition] = useTransition()
   const [selectedCatalogId, setSelectedCatalogId] = useState('manual')
@@ -71,6 +102,8 @@ export function LouvorAdminClient({
   const [form, setForm] = useState({ songTitle: '', artist: '', youtubeLink: '', category: 'Adoração', worshipType: 'Ambos', theme: '' })
   const [suggestionView, setSuggestionView] = useState<'boards' | 'list'>('boards')
   const [selectedSuggestionDate, setSelectedSuggestionDate] = useState('')
+  const [selectedEventByRepertoire, setSelectedEventByRepertoire] = useState<Record<string, string>>({})
+  const [draftSetlistByRepertoire, setDraftSetlistByRepertoire] = useState<Record<string, DraftSetlistSong[]>>({})
   const groupedSuggestions = useMemo(() => groupSuggestionsByDate(suggestions), [suggestions])
   const activeSuggestionGroup = groupedSuggestions.find((group) => group.dateKey === selectedSuggestionDate) ?? groupedSuggestions[0]
   const activeSuggestionDate = activeSuggestionGroup?.dateKey ?? ''
@@ -113,6 +146,60 @@ export function LouvorAdminClient({
     })
   }
 
+  function enrichSuggestion(id: string) {
+    startTransition(async () => {
+      const response = await enriquecerIndicacao(id)
+      if (response.success) toast.success(response.message)
+      else toast.error(response.message)
+    })
+  }
+
+  function runSuggestionAnalysis(id: string) {
+    startTransition(async () => {
+      const response = await gerarAnaliseIndicacao(id)
+      if (response.success) toast.success(response.message)
+      else toast.error(response.message)
+    })
+  }
+
+  function createRepertoireSuggestion() {
+    startTransition(async () => {
+      const response = await criarSugestaoRepertorio()
+      if (response.success) toast.success(response.message)
+      else toast.error(response.message)
+    })
+  }
+
+  function addSuggestionToCatalog(id: string) {
+    startTransition(async () => {
+      const response = await adicionarIndicacaoAoRepertorio(id)
+      if (response.success) toast.success(response.message)
+      else toast.error(response.message)
+    })
+  }
+
+  function addRepertoireToNextScale(id: string) {
+    startTransition(async () => {
+      const response = await adicionarSugestaoRepertorioNaProximaEscala(id, selectedEventByRepertoire[id] || null, draftSetlistByRepertoire[id])
+      if (response.success) toast.success(response.message)
+      else toast.error(response.message)
+    })
+  }
+
+  function getDraftSetlist(item: RepertoireSuggestion) {
+    return draftSetlistByRepertoire[item.id] ?? item.suggested_setlist ?? []
+  }
+
+  function moveDraftSong(item: RepertoireSuggestion, fromIndex: number, direction: -1 | 1) {
+    const current = getDraftSetlist(item)
+    const toIndex = fromIndex + direction
+    if (toIndex < 0 || toIndex >= current.length) return
+    const next = [...current]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    setDraftSetlistByRepertoire((drafts) => ({ ...drafts, [item.id]: next }))
+  }
+
   function updateSuggestion(id: string, status: string) {
     startTransition(async () => {
       const response = await atualizarStatusIndicacao(id, status)
@@ -125,6 +212,29 @@ export function LouvorAdminClient({
   }
 
   return <div className="space-y-6">
+    <section className="rounded-2xl border border-brand/20 bg-gradient-to-br from-brand/15 to-navy-900 p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Análise ministerial</Badge>
+          <h2 className="mt-3 text-xl font-bold text-white">Sugestão de repertório por análise</h2>
+          <p className="mt-1 max-w-3xl text-sm text-[#CBD5E1]">Gere análises temáticas e musicais nas indicações e depois crie um rascunho de repertório alinhado à estação pastoral cadastrada em Seu Ministério.</p>
+        </div>
+        <Button disabled={isPending} onClick={createRepertoireSuggestion} className="h-11 bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />Criar sugestão de repertório</Button>
+      </div>
+      {repertoireSuggestions.length > 0 && <div className="mt-5 grid gap-3 lg:grid-cols-2">
+        {repertoireSuggestions.map((item) => <article key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+          <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-white">{item.title}</h3><p className="mt-1 text-sm text-[#94A3B8]">{item.pastoral_direction || 'Direção pastoral não informada'}</p></div><Badge variant="outline" className="border-white/10 text-[#CBD5E1]">{item.status || 'draft'}</Badge></div>
+          <div className="mt-3 space-y-2">{getDraftSetlist(item).slice(0, 5).map((song, index) => <div key={`${item.id}-${index}-${song.title}`} className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 p-2 text-sm text-[#CBD5E1]"><div className="flex min-w-0 flex-1 flex-col"><span className="truncate font-semibold text-white">{index + 1}. {song.title || 'Música sem título'}</span><span className="truncate text-xs text-[#94A3B8]">{song.artist || 'Sem artista'}{song.moment ? ` · ${song.moment}` : ''}</span></div><Button type="button" size="icon" variant="ghost" disabled={index === 0 || item.status === 'scheduled'} onClick={() => moveDraftSong(item, index, -1)} className="text-[#CBD5E1] hover:bg-white/10 hover:text-white"><ArrowUp className="h-4 w-4" /></Button><Button type="button" size="icon" variant="ghost" disabled={index === getDraftSetlist(item).length - 1 || item.status === 'scheduled'} onClick={() => moveDraftSong(item, index, 1)} className="text-[#CBD5E1] hover:bg-white/10 hover:text-white"><ArrowDown className="h-4 w-4" /></Button></div>)}</div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr,auto]">
+            <Select value={selectedEventByRepertoire[item.id] ?? 'auto'} onValueChange={(eventId) => setSelectedEventByRepertoire((current) => ({ ...current, [item.id]: eventId === 'auto' ? '' : eventId }))}>
+              <SelectTrigger className="border-white/10 bg-black/20 text-white"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="auto">Próximo culto automático</SelectItem>{upcomingEvents.map((event) => <SelectItem key={event.id} value={event.id}>{event.title} — {new Date(`${event.date}T00:00:00`).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button type="button" disabled={isPending || item.status === 'scheduled'} onClick={() => addRepertoireToNextScale(item.id)} className="bg-brand hover:bg-brand/90"><CalendarPlus className="h-4 w-4" />Adicionar</Button>
+          </div>
+        </article>)}
+      </div>}
+    </section>
     <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5">
       <div className="flex items-start gap-3">
         <div className="rounded-2xl bg-brand/15 p-3 text-brand"><Plus className="h-5 w-5" /></div>
@@ -184,7 +294,7 @@ export function LouvorAdminClient({
         <div className="max-h-[620px] overflow-y-auto pr-1">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[#94A3B8]">{activeSuggestionGroup?.label ?? 'Selecione uma pasta'}</h3>
           <div className={suggestionView === 'boards' ? 'grid gap-3 xl:grid-cols-2' : 'grid gap-3'}>
-            {(activeSuggestionGroup?.suggestions ?? []).map((suggestion) => <SuggestionCard key={suggestion.id} suggestion={suggestion} onStatusChange={updateSuggestion} />)}
+            {(activeSuggestionGroup?.suggestions ?? []).map((suggestion) => <SuggestionCard key={suggestion.id} suggestion={suggestion} isPending={isPending} onAddToCatalog={addSuggestionToCatalog} onAnalyze={runSuggestionAnalysis} onEnrich={enrichSuggestion} onStatusChange={updateSuggestion} />)}
           </div>
         </div>
       </div> : <p className="mt-4 text-sm text-[#94A3B8]">Nenhuma indicação recebida ainda.</p>}
@@ -211,12 +321,12 @@ function groupSuggestionsByDate(suggestions: Suggestion[]) {
     }))
 }
 
-function SuggestionCard({ suggestion, onStatusChange }: { suggestion: Suggestion; onStatusChange: (id: string, status: string) => void }) {
+function SuggestionCard({ suggestion, isPending, onAddToCatalog, onAnalyze, onEnrich, onStatusChange }: { suggestion: Suggestion; isPending: boolean; onAddToCatalog: (id: string) => void; onAnalyze: (id: string) => void; onEnrich: (id: string) => void; onStatusChange: (id: string, status: string) => void }) {
   return (
     <article className="rounded-xl border border-white/[0.08] bg-black/20 p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1"><h3 className="font-semibold text-white"><Music2 className="mr-2 inline h-4 w-4 text-brand" />{suggestion.song_title}</h3><p className="break-words text-sm text-[#94A3B8]">{suggestion.artist || 'Sem artista'} · indicado por {suggestion.name} ({suggestion.tribe}){suggestion.phone ? ` · ${suggestion.phone}` : ''}</p><SuggestionAnalysis suggestion={suggestion} />{suggestion.reason && <p className="mt-2 break-words text-sm text-[#CBD5E1]">{suggestion.reason}</p>}<SpiritualResponse suggestion={suggestion} /></div>
-        <div className="flex flex-col gap-2 sm:flex-row">{suggestion.youtube_link && <Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_link} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button>}<Select value={suggestion.status} onValueChange={(status) => onStatusChange(suggestion.id, status)}><SelectTrigger className="w-full sm:w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
+        <div className="min-w-0 flex-1"><h3 className="font-semibold text-white"><Music2 className="mr-2 inline h-4 w-4 text-brand" />{suggestion.song_title}</h3><p className="break-words text-sm text-[#94A3B8]">{suggestion.artist || 'Sem artista'} · indicado por {suggestion.name} ({suggestion.tribe}){suggestion.phone ? ` · ${suggestion.phone}` : ''}</p><SuggestionAnalysis suggestion={suggestion} />{(suggestion.age_range || suggestion.ministry) && <p className="mt-2 text-xs text-[#94A3B8]">{suggestion.age_range || 'Faixa não informada'}{suggestion.ministry ? ` · ${suggestion.ministry}` : ''}</p>}{suggestion.reason && <p className="mt-2 break-words text-sm text-[#CBD5E1]">{suggestion.reason}</p>}<SpiritualResponse suggestion={suggestion} /></div>
+        <div className="flex flex-col gap-2 sm:flex-row"><Button type="button" disabled={isPending} onClick={() => onEnrich(suggestion.id)} variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10"><DatabaseZap className="h-4 w-4" />Enriquecer</Button><Button type="button" disabled={isPending} onClick={() => onAnalyze(suggestion.id)} className="bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />Analisar</Button><Button type="button" disabled={isPending || suggestion.status === 'Repertório oficial'} onClick={() => onAddToCatalog(suggestion.id)} variant="outline" className="border-brand/30 bg-transparent text-brand hover:bg-brand/10"><Plus className="h-4 w-4" />Repertório</Button>{(suggestion.youtube_url || suggestion.youtube_link) && <Button variant="outline" className="border-white/10 bg-transparent text-white hover:bg-white/10" asChild><a href={suggestion.youtube_url || suggestion.youtube_link || '#'} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />YouTube</a></Button>}<Select value={suggestion.status} onValueChange={(status) => onStatusChange(suggestion.id, status)}><SelectTrigger className="w-full sm:w-[220px] bg-black/20 border-white/10 text-white"><SelectValue /></SelectTrigger><SelectContent>{suggestionStatuses.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>
       </div>
     </article>
   )
