@@ -37,6 +37,9 @@ type SuggestionLike = {
   tribe?: string | null
   age_range?: string | null
   ministry?: string | null
+  region?: string | null
+  conversion_time?: string | null
+  participation_time?: string | null
   lyrics_plain?: string | null
 }
 
@@ -112,6 +115,9 @@ export function classifySuggestionExpression(suggestion: SuggestionLike): Spirit
       tribo: suggestion.tribe || 'Não informada',
       faixaEtaria: suggestion.age_range || 'Não informada',
       ministerio: suggestion.ministry || 'Não informado',
+      regiao: suggestion.region || 'Não informada',
+      tempoConversao: suggestion.conversion_time || 'Não informado',
+      tempoParticipacao: suggestion.participation_time || 'Não informado',
     },
   }
 }
@@ -168,7 +174,7 @@ export function summarizeCollectivePatterns(classifications: SpiritualClassifica
   }
 
   const segmentation: SegmentSummary[] = []
-  ;(['tribo', 'faixaEtaria', 'ministerio'] as const).forEach((segment) => {
+  ;(['tribo', 'faixaEtaria', 'ministerio', 'regiao', 'tempoConversao', 'tempoParticipacao'] as const).forEach((segment) => {
     const groups = new Map<string, SpiritualClassification[]>()
     classifications.forEach((item) => {
       const value = item.segments[segment] || 'Não informado'

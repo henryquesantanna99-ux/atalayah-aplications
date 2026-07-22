@@ -23,6 +23,11 @@ export type WorshipSuggestionRow = {
   status: string
   lyrics_plain?: string | null
   metadata_payload?: Record<string, unknown> | null
+  age_range?: string | null
+  ministry?: string | null
+  region?: string | null
+  conversion_time?: string | null
+  participation_time?: string | null
 }
 
 export async function requireWorshipAdmin() {

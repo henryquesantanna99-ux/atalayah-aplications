@@ -43,11 +43,13 @@ type View = 'home' | 'suggest' | 'vote'
 const categories = ['Prévia', 'Celebração', 'Adoração', 'Não sei informar']
 const worshipTypes = ['Necessidade / clamor / entrega', 'Resposta / direção / declaração', 'Os dois', 'Não sei informar']
 const heartExperienceOptions = ['Senti consolo de Deus', 'Senti direção para uma decisão', 'Senti confronto e arrependimento', 'Senti esperança e fé', 'Senti gratidão e adoração', 'Senti desejo de voltar para Deus', 'Senti desejo de servir', 'Senti necessidade de cura', 'Prefiro não responder']
+const conversionTimes = ['Menos de 1 ano', '1 a 3 anos', '4 a 10 anos', 'Mais de 10 anos', 'Prefiro não responder']
+const participationTimes = ['Estou visitando', 'Menos de 6 meses', '6 meses a 2 anos', '3 a 5 anos', 'Mais de 5 anos', 'Prefiro não responder']
 const nextSteps = ['Orar mais sobre isso', 'Conversar com alguém da liderança', 'Buscar reconciliação com alguém', 'Voltar a congregar com mais constância', 'Servir em alguma área', 'Estudar mais a Palavra', 'Pedir ajuda pastoral', 'Ainda não sei', 'Outro']
 const wizardSteps = ['Quem indica', 'Escolha da música', 'Confirmação', 'Leitura espiritual', 'Revisão']
 
 const emptySuggestion = {
-  nome: '', tribo: '', telefone: '', faixaEtaria: '', ministerio: '', musica: '', artista: '', categoriaSugerida: '', tipoLouvor: '', motivo: '', spiritual_area: '', spiritual_area_other: '', spiritual_experience_note: '', next_step: '', next_step_other: '', youtube_video_id: '', youtube_title: '', youtube_channel: '', youtube_thumbnail: '', youtube_duration: '', youtube_url: '',
+  nome: '', tribo: '', telefone: '', faixaEtaria: '', ministerio: '', regiao: '', tempoConversao: '', tempoParticipacao: '', musica: '', artista: '', categoriaSugerida: '', tipoLouvor: '', motivo: '', spiritual_area: '', spiritual_area_other: '', spiritual_experience_note: '', next_step: '', next_step_other: '', youtube_video_id: '', youtube_title: '', youtube_channel: '', youtube_thumbnail: '', youtube_duration: '', youtube_url: '',
 }
 
 export function WorshipVotingClient({ songs }: { songs: Song[] }) {
@@ -159,7 +161,7 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
       </div>
       <WizardProgress activeStep={step} canAdvance={canAdvance} />
       <div key={step} className="mt-7 rounded-2xl border border-white/10 bg-black/20 p-4 transition-all duration-300 animate-in fade-in slide-in-from-right-4 sm:p-5">
-        {step === 0 && <div className="grid gap-4 sm:grid-cols-2"><Field label="Nome completo *" value={suggestion.nome} onChange={(nome) => setSuggestion({ ...suggestion, nome })} /><Field label="Tribo / Grupo / Ministério *" value={suggestion.tribo} onChange={(tribo) => setSuggestion({ ...suggestion, tribo })} /><Field label="Telefone / WhatsApp *" value={suggestion.telefone} onChange={(telefone) => setSuggestion({ ...suggestion, telefone })} inputMode="tel" /><SelectField label="Faixa etária" value={suggestion.faixaEtaria} options={['Até 17 anos', '18 a 25 anos', '26 a 35 anos', '36 a 50 anos', 'Acima de 50 anos']} onChange={(faixaEtaria) => setSuggestion({ ...suggestion, faixaEtaria })} /><Field label="Ministério em que serve, se houver" value={suggestion.ministerio} onChange={(ministerio) => setSuggestion({ ...suggestion, ministerio })} /></div>}
+        {step === 0 && <WhoSuggestsStep suggestion={suggestion} onSuggestionChange={setSuggestion} />}
         {step === 1 && <SongSearchStep suggestion={suggestion} onSuggestionChange={setSuggestion} results={youtubeResults} pendingSelection={pendingYoutubeSelection} isSearching={isSearching} searchError={youtubeSearchError} onSelect={selectYoutube} onConfirm={confirmYoutubeSelection} onCancel={() => setPendingYoutubeSelection(null)} />}
         {step === 2 && <div className="space-y-4"><div className="rounded-2xl border border-brand/30 bg-brand/10 p-4"><p className="text-sm text-brand">Música selecionada</p><h3 className="mt-2 text-xl font-bold text-white">{suggestion.musica || 'Informe a música manualmente'}</h3><p className="text-[#CBD5E1]">{suggestion.artista || 'Artista não informado'}</p>{suggestion.youtube_url && <a href={suggestion.youtube_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-brand"><ExternalLink className="h-4 w-4" />Abrir referência</a>}</div><div className="grid gap-4 sm:grid-cols-2"><SelectField label="Categoria sugerida" value={suggestion.categoriaSugerida} options={categories} onChange={(categoriaSugerida) => setSuggestion({ ...suggestion, categoriaSugerida })} /><SelectField label="Expressa mais" value={suggestion.tipoLouvor} options={worshipTypes} onChange={(tipoLouvor) => setSuggestion({ ...suggestion, tipoLouvor })} /></div></div>}
         {step === 3 && <SpiritualReadingStep suggestion={suggestion} onSuggestionChange={setSuggestion} />}
@@ -174,6 +176,25 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
   }
 
   return <section className="mx-auto max-w-5xl space-y-6"><MemberLoginBar /><div className="rounded-3xl border border-white/[0.08] bg-gradient-to-br from-navy-900 to-black p-6 sm:p-8"><Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Termômetro da igreja</Badge><h1 className="mt-4 text-3xl font-bold text-white sm:text-4xl">Indicação e Votação de Louvor</h1><p className="mt-4 max-w-3xl text-[#CBD5E1]">As indicações passam por busca de letra, metadados, análise temática, análise musical e discernimento da liderança. Você pode entrar como membro ou seguir sem login.</p></div><div className="grid gap-4 md:grid-cols-2"><HomeCard icon={<Music2 />} title="Indicar uma música" description="Envie uma sugestão em um wizard guiado para análise ministerial." cta="Clique aqui para indicar" onClick={() => setView('suggest')} /><HomeCard icon={<HeartHandshake />} title="Votar em músicas" description="A votação pública estará disponível em breve." cta="Clique aqui para votar" disabled badge="Em breve" onClick={() => setView('vote')} /></div></section>
+}
+
+function WhoSuggestsStep({ suggestion, onSuggestionChange }: { suggestion: typeof emptySuggestion; onSuggestionChange: (suggestion: typeof emptySuggestion) => void }) {
+  return <div className="space-y-5">
+    <div>
+      <h3 className="text-lg font-bold text-white">Conte quem está indicando</h3>
+      <p className="mt-1 text-sm text-[#94A3B8]">Os campos de contexto são opcionais e usados somente para compreender padrões coletivos entre grupos.</p>
+    </div>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field label="Nome completo *" value={suggestion.nome} onChange={(nome) => onSuggestionChange({ ...suggestion, nome })} />
+      <Field label="Tribo / Grupo / Ministério *" value={suggestion.tribo} onChange={(tribo) => onSuggestionChange({ ...suggestion, tribo })} />
+      <Field label="Telefone / WhatsApp *" value={suggestion.telefone} onChange={(telefone) => onSuggestionChange({ ...suggestion, telefone })} inputMode="tel" />
+      <SelectField label="Faixa etária (opcional)" value={suggestion.faixaEtaria} options={['Até 17 anos', '18 a 25 anos', '26 a 35 anos', '36 a 50 anos', 'Acima de 50 anos', 'Prefiro não responder']} onChange={(faixaEtaria) => onSuggestionChange({ ...suggestion, faixaEtaria })} />
+      <Field label="Ministério em que serve (opcional)" value={suggestion.ministerio} onChange={(ministerio) => onSuggestionChange({ ...suggestion, ministerio })} />
+      <Field label="Região / bairro (opcional)" value={suggestion.regiao} onChange={(regiao) => onSuggestionChange({ ...suggestion, regiao })} />
+      <SelectField label="Tempo de conversão (opcional)" value={suggestion.tempoConversao} options={conversionTimes} onChange={(tempoConversao) => onSuggestionChange({ ...suggestion, tempoConversao })} />
+      <SelectField label="Tempo de participação (opcional)" value={suggestion.tempoParticipacao} options={participationTimes} onChange={(tempoParticipacao) => onSuggestionChange({ ...suggestion, tempoParticipacao })} />
+    </div>
+  </div>
 }
 
 function SongSearchStep({ suggestion, onSuggestionChange, results, pendingSelection, isSearching, searchError, onSelect, onConfirm, onCancel }: {

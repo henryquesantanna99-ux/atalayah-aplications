@@ -33,6 +33,9 @@ type Suggestion = {
   youtube_thumbnail?: string | null
   age_range?: string | null
   ministry?: string | null
+  region?: string | null
+  conversion_time?: string | null
+  participation_time?: string | null
 }
 
 type VotingSong = {

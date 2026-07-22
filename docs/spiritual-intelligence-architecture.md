@@ -28,7 +28,7 @@ Os domínios podem consumir a mesma indicação, mas não compartilham conclusõ
 2. **Enriquecimento:** reutiliza LRCLIB e Soundcharts para obter letra e metadados ausentes. O enriquecimento ocorre internamente na execução diária.
 3. **Classificação:** estrutura temas, necessidades, emoções, próximos passos e convicções. A letra contribui para temas; necessidades e emoções exigem contexto fornecido pelo membro.
 4. **Quantificação:** conta recorrências sem interpretação pastoral.
-5. **Segmentação:** distribui recorrências pelos grupos disponíveis, atualmente tribo, faixa etária e ministério.
+5. **Segmentação:** distribui recorrências pelos grupos declarados, atualmente tribo, faixa etária, ministério, região, tempo de conversão e tempo de participação. Os campos adicionais são opcionais e valores ausentes não são inferidos.
 6. **Associações:** aponta elementos que apareceram juntos, sem afirmar causalidade.
 7. **Evolução:** compara percentuais com coletas anteriores e identifica crescimento, redução e surgimento de padrões.
 8. **Discernimento:** apresenta evidências organizadas para leitura da liderança.
@@ -58,4 +58,4 @@ O pipeline coletivo foi removido do arquivo geral de actions e isolado em `spiri
 
 O arquivo geral ainda reúne votação, indicações e repertório. Esses domínios podem ser separados gradualmente em módulos próprios, preservando os contratos usados pela interface durante a transição.
 
-Também devem ser adicionados segmentos apenas quando houver dados confiáveis e consentidos. Campos ausentes não devem ser inferidos pela IA.
+Os segmentos adicionais são autodeclarados e opcionais. A interface explica seu uso coletivo, oferece “Prefiro não responder” nos campos de jornada e nunca pede que a IA preencha valores ausentes.

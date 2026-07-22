@@ -59,8 +59,11 @@ async function buildAiCollectiveClassifications(suggestions: WorshipSuggestionRo
     proximo_passo: suggestion.next_step_other || suggestion.next_step,
     segmentos: {
       tribo: suggestion.tribe,
-      faixaEtaria: (suggestion as WorshipSuggestionRow & { age_range?: string | null }).age_range,
-      ministerio: (suggestion as WorshipSuggestionRow & { ministry?: string | null }).ministry,
+      faixaEtaria: suggestion.age_range,
+      ministerio: suggestion.ministry,
+      regiao: suggestion.region,
+      tempoConversao: suggestion.conversion_time,
+      tempoParticipacao: suggestion.participation_time,
     },
   }))
 
