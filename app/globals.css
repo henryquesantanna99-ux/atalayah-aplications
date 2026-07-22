@@ -89,3 +89,9 @@
   .field input, .field select { @apply block mt-2 w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500; }
   .field option { @apply bg-[#0d1b2e]; }
 }
+
+/* The CRM toolbar stays fixed while the board owns both scroll axes. */
+.commercial-kanban-scroll {
+  scrollbar-gutter: stable both-edges;
+  touch-action: pan-x pan-y;
+}
