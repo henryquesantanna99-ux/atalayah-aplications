@@ -39,7 +39,8 @@ Os domínios podem consumir a mesma indicação, mas não compartilham conclusõ
 - `app/louvor/actions.ts`: persistência e enriquecimento inicial de indicações.
 - `lib/music/lrclib.ts` e `lib/music/soundcharts.ts`: integrações de letra e metadados.
 - `lib/spiritual-intelligence/daily-analysis.ts`: classificação fallback, agregação, segmentação, associações e evolução.
-- `gerarAnaliseEspiritualDoDia`: orquestra o processamento coletivo por data.
+- `app/(app)/louvor-admin/spiritual-intelligence-actions.ts`: orquestra enriquecimento, classificação e persistência do processamento coletivo por data.
+- `app/(app)/louvor-admin/shared.ts`: centraliza autorização, tipos e leitura do perfil ministerial usados pelos domínios administrativos.
 - Tabelas `spiritual_intelligence_runs`, `spiritual_intelligence_classifications` e `spiritual_intelligence_daily_summaries`: histórico separado do domínio musical.
 
 ## Fluxo da interface administrativa
@@ -51,8 +52,10 @@ O Louvor Admin mantém quatro áreas independentes:
 - **Inteligência:** executa uma única análise coletiva por data e apresenta panorama, segmentação, associações e evolução.
 - **Repertórios:** cria e revisa rascunhos antes de enviá-los a uma escala.
 
-## Próximas separações estruturais
+## Separações estruturais realizadas
 
-O arquivo de server actions ainda contém responsabilidades de múltiplos domínios. A separação futura deve mover votação, indicações, inteligência e repertório para módulos próprios, mantendo um barrel compatível durante a transição. A action individual legada de análise deve ser isolada como curadoria musical ou removida depois de confirmar que não possui consumidores.
+O pipeline coletivo foi removido do arquivo geral de actions e isolado em `spiritual-intelligence-actions.ts`. As actions individuais legadas de análise temática/musical e enriquecimento manual foram removidas após a confirmação de que não possuíam consumidores. O enriquecimento continua automático no envio e, quando necessário, na análise coletiva diária.
+
+O arquivo geral ainda reúne votação, indicações e repertório. Esses domínios podem ser separados gradualmente em módulos próprios, preservando os contratos usados pela interface durante a transição.
 
 Também devem ser adicionados segmentos apenas quando houver dados confiáveis e consentidos. Campos ausentes não devem ser inferidos pela IA.

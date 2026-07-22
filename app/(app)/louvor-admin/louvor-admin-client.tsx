@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { adicionarIndicacaoAoRepertorio, adicionarSugestaoRepertorioNaProximaEscala, atualizarMusicaVotacao, atualizarStatusIndicacao, criarSugestaoRepertorio, enviarMusicaParaVotacao, gerarAnaliseEspiritualDoDia } from './actions'
+import { adicionarIndicacaoAoRepertorio, adicionarSugestaoRepertorioNaProximaEscala, atualizarMusicaVotacao, atualizarStatusIndicacao, criarSugestaoRepertorio, enviarMusicaParaVotacao } from './actions'
+import { gerarAnaliseEspiritualDoDia } from './spiritual-intelligence-actions'
 
 type Suggestion = {
   id: string
