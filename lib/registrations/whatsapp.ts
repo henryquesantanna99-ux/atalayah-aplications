@@ -89,6 +89,9 @@ export async function sendRegistrationConfirmationWhatsApp({
         },
       }
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
+
   const response = await fetch('https://api.ycloud.com/v2/whatsapp/messages/sendDirectly', {
     method: 'POST',
     headers: {
@@ -96,8 +99,10 @@ export async function sendRegistrationConfirmationWhatsApp({
       'X-API-Key': apiKey,
     },
     body: JSON.stringify(payload),
-  })
+    signal: controller.signal,
+  }).catch((error) => ({ ok: false, status: 0, json: async () => ({ error: error instanceof Error ? error.message : 'Erro desconhecido' }) } as Response))
 
+  clearTimeout(timeout)
   const body = await response.json().catch(() => ({}))
   return {
     sent: response.ok,
