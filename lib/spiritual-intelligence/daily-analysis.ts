@@ -14,7 +14,7 @@ export type SpiritualSummary = {
   quantification: Record<'themes' | 'needs' | 'emotions' | 'nextSteps', MetricCount[]>
   segmentation: SegmentSummary[]
   associations: AssociationSummary[]
-  evolution: { note: string; comparedDays: number }
+  evolution: SpiritualEvolution
   discernment: string[]
   recommendations: string[]
 }
@@ -22,6 +22,8 @@ export type SpiritualSummary = {
 export type MetricCount = { label: string; count: number; percentage: number }
 export type SegmentSummary = { segment: string; value: string; total: number; topThemes: MetricCount[] }
 export type AssociationSummary = { source: string; target: string; count: number; description: string }
+export type SpiritualTrend = { category: keyof SpiritualSummary['quantification']; label: string; current: number; previous: number; delta: number }
+export type SpiritualEvolution = { note: string; comparedDays: number; growing: SpiritualTrend[]; declining: SpiritualTrend[]; emerging: SpiritualTrend[] }
 
 type SuggestionLike = {
   id: string
@@ -79,25 +81,30 @@ function matchKeywords(text: string, catalog: Array<[string, string[]]>, fallbac
 }
 
 export function classifySuggestionExpression(suggestion: SuggestionLike): SpiritualClassification {
-  const joined = normalizeText([
-    suggestion.song_title,
-    suggestion.artist,
+  const memberContext = normalizeText([
     suggestion.reason,
     suggestion.spiritual_area,
     suggestion.spiritual_experience_note,
     suggestion.next_step,
     suggestion.next_step_other,
+  ].filter(Boolean).join(' '))
+  const thematicContext = normalizeText([
+    suggestion.song_title,
+    suggestion.artist,
+    suggestion.reason,
+    suggestion.spiritual_area,
     suggestion.lyrics_plain,
   ].filter(Boolean).join(' '))
 
   const nextStep = suggestion.next_step_other || suggestion.next_step || 'próximo passo não informado'
+  const hasMemberContext = Boolean(memberContext)
 
   return {
     suggestionId: suggestion.id,
     songTitle: suggestion.song_title,
-    themes: matchKeywords(joined, themeKeywords, suggestion.spiritual_area || 'tema a discernir coletivamente'),
-    needs: matchKeywords(joined, needKeywords, nextStep),
-    emotions: matchKeywords(joined, emotionKeywords, suggestion.spiritual_experience_note || 'emoção não informada'),
+    themes: matchKeywords(thematicContext, themeKeywords, suggestion.spiritual_area || 'tema a discernir coletivamente'),
+    needs: hasMemberContext ? matchKeywords(memberContext, needKeywords, 'necessidade não explicitada nas respostas') : ['contexto do membro não informado'],
+    emotions: hasMemberContext ? matchKeywords(memberContext, emotionKeywords, suggestion.spiritual_experience_note || 'emoção não informada') : ['contexto do membro não informado'],
     nextSteps: unique([nextStep]),
     convictions: suggestion.reason ? unique([suggestion.reason.slice(0, 120)]) : [],
     evidence: unique([suggestion.reason, suggestion.spiritual_area, suggestion.spiritual_experience_note, suggestion.next_step].filter(Boolean).map(String)),
@@ -117,7 +124,41 @@ function countMetrics(values: string[][], total: number): MetricCount[] {
     .map(([label, count]) => ({ label, count, percentage: total ? Math.round((count / total) * 100) : 0 }))
 }
 
-export function summarizeCollectivePatterns(classifications: SpiritualClassification[], comparedDays = 0): SpiritualSummary {
+function calculateEvolution(current: SpiritualSummary['quantification'], previous: SpiritualSummary['quantification'][]): SpiritualEvolution {
+  const latest = previous[0]
+  if (!latest) return {
+    note: 'Primeiro recorte salvo; a evolução será exibida com novas análises diárias.',
+    comparedDays: 0,
+    growing: [],
+    declining: [],
+    emerging: [],
+  }
+
+  const trends: SpiritualTrend[] = []
+  ;(Object.keys(current) as Array<keyof SpiritualSummary['quantification']>).forEach((category) => {
+    const previousByLabel = new Map(latest[category].map((item) => [item.label, item.percentage]))
+    current[category].forEach((item) => {
+      const previousPercentage = previousByLabel.get(item.label) ?? 0
+      trends.push({ category, label: item.label, current: item.percentage, previous: previousPercentage, delta: item.percentage - previousPercentage })
+    })
+    latest[category].forEach((item) => {
+      if (!current[category].some((currentItem) => currentItem.label === item.label)) {
+        trends.push({ category, label: item.label, current: 0, previous: item.percentage, delta: -item.percentage })
+      }
+    })
+  })
+
+  const byAbsoluteDelta = (a: SpiritualTrend, b: SpiritualTrend) => Math.abs(b.delta) - Math.abs(a.delta)
+  return {
+    note: `Variações percentuais comparadas ao recorte anterior; histórico disponível de ${previous.length} dia${previous.length === 1 ? '' : 's'}.`,
+    comparedDays: previous.length,
+    growing: trends.filter((item) => item.previous > 0 && item.delta > 0).sort(byAbsoluteDelta).slice(0, 8),
+    declining: trends.filter((item) => item.delta < 0).sort(byAbsoluteDelta).slice(0, 8),
+    emerging: trends.filter((item) => item.previous === 0 && item.current > 0).sort(byAbsoluteDelta).slice(0, 8),
+  }
+}
+
+export function summarizeCollectivePatterns(classifications: SpiritualClassification[], previous: SpiritualSummary['quantification'][] = []): SpiritualSummary {
   const total = classifications.length
   const quantification = {
     themes: countMetrics(classifications.map((item) => item.themes), total),
@@ -157,10 +198,7 @@ export function summarizeCollectivePatterns(classifications: SpiritualClassifica
     quantification,
     segmentation,
     associations,
-    evolution: {
-      note: comparedDays > 0 ? `Comparável com ${comparedDays} análise${comparedDays === 1 ? '' : 's'} anterior${comparedDays === 1 ? '' : 'es'}.` : 'Primeiro recorte salvo; a evolução será exibida com novas análises diárias.',
-      comparedDays,
-    },
+    evolution: calculateEvolution(quantification, previous),
     discernment: [
       'Os dados descrevem padrões coletivos e devem ser comparados com a direção espiritual da liderança.',
       'A leitura pastoral final permanece responsabilidade da liderança; o sistema apenas organiza evidências.',

@@ -7,7 +7,7 @@ import { generateText } from 'ai'
 import { openai } from '@/lib/openai'
 import { findBestLyrics } from '@/lib/music/lrclib'
 import { searchSoundchartsSong } from '@/lib/music/soundcharts'
-import { classifySuggestionExpression, summarizeCollectivePatterns } from '@/lib/spiritual-intelligence/daily-analysis'
+import { classifySuggestionExpression, summarizeCollectivePatterns, type SpiritualSummary } from '@/lib/spiritual-intelligence/daily-analysis'
 
 type AdminResponse<T = unknown> = { success: boolean; message: string; data?: T }
 type SpiritualSummaryRow = { id: string; run_id: string; analysis_date: string; quantification: Record<string, unknown>; segmentation: unknown[]; associations: unknown[]; evolution: Record<string, unknown>; discernment: string[]; recommendations: string[]; charts_payload: Record<string, unknown>; created_at: string }
@@ -450,12 +450,16 @@ export async function gerarAnaliseEspiritualDoDia(dateKey: string): Promise<Admi
     const enriched = await Promise.all(suggestions.map((suggestion) => enrichSuggestionIfNeeded(supabase, suggestion)))
     const classifications = await buildAiCollectiveClassifications(enriched)
 
-    const { count: previousCount } = await supabase
+    const { data: previousSummaries, error: previousSummariesError } = await supabase
       .from('spiritual_intelligence_daily_summaries' as never)
-      .select('id', { count: 'exact', head: true })
+      .select('quantification')
       .lt('analysis_date', dateKey)
+      .order('analysis_date', { ascending: false })
+      .limit(8)
 
-    const summary = summarizeCollectivePatterns(classifications, previousCount ?? 0)
+    if (previousSummariesError) throw previousSummariesError
+    const previousQuantifications = ((previousSummaries ?? []) as unknown as Array<{ quantification: SpiritualSummaryRow['quantification'] }>).map((item) => item.quantification as SpiritualSummary['quantification'])
+    const summary = summarizeCollectivePatterns(classifications, previousQuantifications)
     const modelUsed = process.env.OPENAI_API_KEY ? process.env.OPENAI_ANALYSIS_MODEL || 'gpt-4o-mini' : 'collective-heuristic'
 
     const { data: run, error: runError } = await supabase
