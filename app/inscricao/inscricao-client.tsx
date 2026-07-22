@@ -26,6 +26,9 @@ export function InscricaoClient({ initialId }: { initialId?: string }) {
   const [status, setStatus] = useState('aguardando_pagamento')
   const [pix, setPix] = useState<{ qr_code?: string; qr_code_base64?: string; payment_id?: string } | null>(null)
   const [groupUrl, setGroupUrl] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [paymentReceivedAt, setPaymentReceivedAt] = useState('')
   const [isPending, startTransition] = useTransition()
   const isYouth = form.tipo_inscricao === 'para_jovem'
   const age = form.idade ? Number(form.idade) : null
@@ -39,6 +42,9 @@ export function InscricaoClient({ initialId }: { initialId?: string }) {
         const data = await res.json()
         setStatus(data.status_pagamento)
         setGroupUrl(data.group_url || '')
+        setContactEmail(data.email_contato || '')
+        setContactPhone(data.telefone_contato || '')
+        setPaymentReceivedAt(data.data_pagamento || data.webhook_recebido_em || '')
       }
     }
     load()
@@ -62,6 +68,25 @@ export function InscricaoClient({ initialId }: { initialId?: string }) {
     })
   }
 
+  async function copyPixToClipboard(code: string) {
+    if (!code) return false
+    try {
+      await navigator.clipboard.writeText(code)
+      return true
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = code
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      document.body.appendChild(textarea)
+      textarea.select()
+      const copied = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      return copied
+    }
+  }
+
   async function generatePix() {
     if (!id) return
     startTransition(async () => {
@@ -70,7 +95,12 @@ export function InscricaoClient({ initialId }: { initialId?: string }) {
       if (res.ok) {
         setPix(data)
         setStatus('processando')
-        toast.success('Pix gerado com sucesso.')
+        if (data.qr_code) {
+          const copied = await copyPixToClipboard(data.qr_code)
+          toast.success(copied ? 'Pix copiado automaticamente para a área de transferência.' : 'Pix gerado. Copie o código exibido na tela.')
+        } else {
+          toast.success('Pix gerado com sucesso.')
+        }
       } else toast.error(data.message || 'Não foi possível gerar o Pix.')
     })
   }
@@ -108,7 +138,7 @@ export function InscricaoClient({ initialId }: { initialId?: string }) {
           </Block>
         </div>
         <div className="mt-6 flex justify-end"><Button disabled={isPending} onClick={submit} className="h-12 w-full bg-brand text-base hover:bg-brand/90 sm:w-auto">Enviar inscrição</Button></div>
-      </> : <FinalStep id={id} status={status} pix={pix} groupUrl={groupUrl} isPending={isPending} onGeneratePix={generatePix} />}
+      </> : <FinalStep id={id} status={status} pix={pix} groupUrl={groupUrl} contactEmail={contactEmail} contactPhone={contactPhone} paymentReceivedAt={paymentReceivedAt} isPending={isPending} onGeneratePix={generatePix} />}
     </section>
     <aside className="space-y-4">
       <Info icon={<AlertCircle className="h-5 w-5" />} text="Sua inscrição somente será confirmada após o pagamento da taxa de inscrição no valor de R$ 29,00." />
@@ -117,7 +147,7 @@ export function InscricaoClient({ initialId }: { initialId?: string }) {
   </div>
 }
 
-function FinalStep({ id, status, pix, groupUrl, isPending, onGeneratePix }: any) { const paid = status === 'pago'; return <div className="space-y-5 text-center"><CheckCircle2 className={`mx-auto h-14 w-14 ${paid ? 'text-emerald-400' : 'text-brand'}`} /><h2 className="text-2xl font-bold">{paid ? 'Pagamento confirmado.' : 'Inscrição recebida!'}</h2><p className="text-[#CBD5E1]">{paid ? 'Sua inscrição foi confirmada.' : 'Aguardando confirmação do pagamento...'}</p><p className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-[#CBD5E1]">ID da inscrição: <span className="font-mono text-white">{id}</span></p><p className="text-sm text-[#94A3B8]">Status: {paymentLabels[status as keyof typeof paymentLabels] || status}</p>{pix?.qr_code_base64 && <img alt="QR Code Pix" className="mx-auto h-56 w-56 rounded-xl bg-white p-2" src={`data:image/png;base64,${pix.qr_code_base64}`} />}{pix?.qr_code && <textarea readOnly value={pix.qr_code} className="min-h-28 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white" />}{paid && groupUrl && <Button asChild className="h-12 w-full bg-emerald-600 text-base hover:bg-emerald-700 sm:w-auto"><a href={groupUrl} target="_blank" rel="noreferrer">Entrar no grupo</a></Button>}{!paid && <p className="text-sm text-[#94A3B8]">Assim que o pagamento for confirmado, volte para esta página para receber seu acesso.</p>}<Button disabled={isPending || paid} onClick={onGeneratePix} className="h-12 w-full bg-brand text-base hover:bg-brand/90 sm:w-auto"><QrCode className="h-5 w-5" />Gerar Pix</Button></div> }
+function FinalStep({ id, status, pix, groupUrl, contactEmail, contactPhone, paymentReceivedAt, isPending, onGeneratePix }: any) { const paid = status === 'pago'; return <div className="space-y-5 text-center"><CheckCircle2 className={`mx-auto h-14 w-14 ${paid ? 'text-emerald-400' : 'text-brand'}`} /><h2 className="text-2xl font-bold">{paid ? 'Pagamento confirmado.' : 'Inscrição recebida!'}</h2><p className="text-[#CBD5E1]">{paid ? 'Sua inscrição foi confirmada.' : 'Aguardando confirmação do pagamento...'}</p><p className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-[#CBD5E1]">ID da inscrição: <span className="font-mono text-white">{id}</span></p>{paid && <div className="space-y-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-left text-sm text-emerald-100"><p>Pagamento recebido para o ID do pedido <span className="font-mono font-semibold text-white">{id}</span>{paymentReceivedAt ? ` em ${new Date(paymentReceivedAt).toLocaleString('pt-BR')}` : ''}.</p><p>O acesso ao grupo foi enviado para o WhatsApp cadastrado{contactPhone ? ` (${contactPhone})` : ''}{contactEmail ? ` e o email ${contactEmail} ficou registrado na inscrição` : ''}.</p></div>}<p className="text-sm text-[#94A3B8]">Status: {paymentLabels[status as keyof typeof paymentLabels] || status}</p>{pix?.qr_code_base64 && <img alt="QR Code Pix" className="mx-auto h-56 w-56 rounded-xl bg-white p-2" src={`data:image/png;base64,${pix.qr_code_base64}`} />}{pix?.qr_code && <textarea readOnly value={pix.qr_code} className="min-h-28 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white" />}{paid && groupUrl && <Button asChild className="h-12 w-full bg-emerald-600 text-base hover:bg-emerald-700 sm:w-auto"><a href={groupUrl} target="_blank" rel="noreferrer">Entrar no grupo</a></Button>}{!paid && <p className="text-sm text-[#94A3B8]">Assim que o pagamento for confirmado, volte para esta página para receber seu acesso.</p>}<Button disabled={isPending || paid} onClick={onGeneratePix} className="h-12 w-full bg-brand text-base hover:bg-brand/90 sm:w-auto"><QrCode className="h-5 w-5" />Gerar Pix</Button></div> }
 function Choice({ active, icon, title, onClick }: any) { return <button type="button" onClick={onClick} className={`flex min-h-14 flex-1 items-center gap-3 rounded-xl border p-4 text-left transition ${active ? 'border-brand/50 bg-brand/15 text-white' : 'border-white/10 bg-black/20 text-[#CBD5E1]'}`}>{icon}<span className="font-semibold">{title}</span></button> }
 function Block({ title, hint, children }: any) { return <section><h2 className="text-lg font-bold text-white">{title}</h2>{hint && <p className="mt-1 text-sm text-[#94A3B8]">{hint}</p>}<div className="mt-4 grid gap-4 sm:grid-cols-2">{children}</div></section> }
 function Field({ label, value, onChange, type = 'text', required }: any) { return <div><Label>{label}{required && ' *'}</Label><Input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="mt-2 h-12 border-white/10 bg-black/20 text-base text-white" /></div> }
