@@ -73,6 +73,7 @@ type UpcomingEvent = {
 
 type SpiritualSummary = {
   id: string
+  run_id: string
   analysis_date: string
   quantification: { themes?: MetricCount[]; needs?: MetricCount[]; emotions?: MetricCount[]; nextSteps?: MetricCount[] }
   segmentation: Array<{ segment: string; value: string; total: number; topThemes?: MetricCount[] }>
@@ -130,6 +131,8 @@ export function LouvorAdminClient({
   const [selectedSuggestionDate, setSelectedSuggestionDate] = useState('')
   const [selectedEventByRepertoire, setSelectedEventByRepertoire] = useState<Record<string, string>>({})
   const [draftSetlistByRepertoire, setDraftSetlistByRepertoire] = useState<Record<string, DraftSetlistSong[]>>({})
+  const [selectedRepertoireSummaryId, setSelectedRepertoireSummaryId] = useState(spiritualSummaries[0]?.id ?? '')
+  const selectedRepertoireSummary = spiritualSummaries.find((summary) => summary.id === selectedRepertoireSummaryId)
   const groupedSuggestions = useMemo(() => groupSuggestionsByDate(suggestions), [suggestions])
   const activeSuggestionGroup = groupedSuggestions.find((group) => group.dateKey === selectedSuggestionDate) ?? groupedSuggestions[0]
   const activeSuggestionDate = activeSuggestionGroup?.dateKey ?? ''
@@ -182,7 +185,7 @@ export function LouvorAdminClient({
 
   function createRepertoireSuggestion() {
     startTransition(async () => {
-      const response = await criarSugestaoRepertorio()
+      const response = await criarSugestaoRepertorio(selectedRepertoireSummaryId)
       if (response.success) toast.success(response.message)
       else toast.error(response.message)
     })
@@ -243,13 +246,17 @@ export function LouvorAdminClient({
     </section>
 
     {activeSection === 'repertorios' && <section className="rounded-2xl border border-brand/20 bg-gradient-to-br from-brand/15 to-navy-900 p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="grid gap-5 lg:grid-cols-[1fr,360px] lg:items-end">
         <div>
           <Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Análise ministerial</Badge>
           <h2 className="mt-3 text-xl font-bold text-white">Sugestão de repertório por análise</h2>
           <p className="mt-1 max-w-3xl text-sm text-[#CBD5E1]">Crie rascunhos de repertório a partir das análises coletivas e ajuste a ordem antes de enviar para uma escala.</p>
         </div>
-        <Button disabled={isPending} onClick={createRepertoireSuggestion} className="h-11 bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />Criar sugestão de repertório</Button>
+        <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
+          <div><Label htmlFor="repertoire-source-analysis">Análise coletiva de origem</Label><Select value={selectedRepertoireSummaryId} onValueChange={setSelectedRepertoireSummaryId}><SelectTrigger id="repertoire-source-analysis" className="mt-2 border-white/10 bg-black/20 text-white"><SelectValue placeholder="Selecione uma análise" /></SelectTrigger><SelectContent>{spiritualSummaries.map((summary) => <SelectItem key={summary.id} value={summary.id}>{new Date(`${summary.analysis_date}T00:00:00`).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent></Select></div>
+          {selectedRepertoireSummary && <p className="text-xs text-[#94A3B8]">Temas observados: {selectedRepertoireSummary.quantification?.themes?.slice(0, 3).map((theme) => theme.label).join(', ') || 'sem temas quantificados'}.</p>}
+          <Button disabled={isPending || !selectedRepertoireSummaryId} onClick={createRepertoireSuggestion} className="h-11 w-full bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />Criar rascunho recomendado</Button>
+        </div>
       </div>
       {repertoireSuggestions.length > 0 && <div className="mt-5 grid gap-3 lg:grid-cols-2">
         {repertoireSuggestions.map((item) => <article key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4">

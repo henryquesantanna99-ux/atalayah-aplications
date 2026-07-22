@@ -32,7 +32,7 @@ Os domínios podem consumir a mesma indicação, mas não compartilham conclusõ
 6. **Associações:** aponta elementos que apareceram juntos, sem afirmar causalidade.
 7. **Evolução:** compara percentuais com coletas anteriores e identifica crescimento, redução e surgimento de padrões.
 8. **Discernimento:** apresenta evidências organizadas para leitura da liderança.
-9. **Resposta ministerial:** oferece recomendações e rascunhos; qualquer decisão continua manual.
+9. **Resposta ministerial:** permite criar um rascunho de repertório a partir de uma análise coletiva escolhida. As músicas candidatas são priorizadas pela relação com os temas estruturados daquela execução; qualquer decisão e edição continuam manuais.
 
 ## Componentes existentes reaproveitados
 
@@ -50,7 +50,7 @@ O Louvor Admin mantém quatro áreas independentes:
 - **Votação:** configura o termômetro público de músicas.
 - **Indicações:** organiza entradas por data e permite curadoria musical.
 - **Inteligência:** executa uma única análise coletiva por data e apresenta panorama, segmentação, associações e evolução.
-- **Repertórios:** cria e revisa rascunhos antes de enviá-los a uma escala.
+- **Repertórios:** exige a escolha de uma análise coletiva de origem, cria um rascunho rastreável e permite revisá-lo antes de enviá-lo a uma escala.
 
 ## Separações estruturais realizadas
 

@@ -155,44 +155,93 @@ function normalizeSetlistMoment(value?: string | null) {
     : null
 }
 
-export async function criarSugestaoRepertorio(): Promise<AdminResponse> {
+type RepertoireSourceSummary = {
+  id: string
+  run_id: string
+  analysis_date: string
+  quantification: { themes?: Array<{ label: string; percentage: number }> }
+  recommendations: string[]
+}
+
+type RepertoireClassification = {
+  suggestion_id: string
+  classification: { themes?: string[] }
+}
+
+export async function criarSugestaoRepertorio(summaryId: string): Promise<AdminResponse> {
   try {
-    const { supabase } = await requireWorshipAdmin()
+    const { supabase, user } = await requireWorshipAdmin()
+    if (!summaryId) return { success: false, message: 'Selecione uma análise coletiva para orientar o repertório.' }
+
     const ministryProfile = await getLatestMinistryProfile(supabase)
-    const { data: suggestions, error } = await supabase
+    const { data: summaryData, error: summaryError } = await supabase
+      .from('spiritual_intelligence_daily_summaries' as never)
+      .select('id, run_id, analysis_date, quantification, recommendations')
+      .eq('id', summaryId)
+      .single()
+
+    if (summaryError) throw summaryError
+    const summary = summaryData as unknown as RepertoireSourceSummary
+    const start = `${summary.analysis_date}T00:00:00.000Z`
+    const endDate = new Date(start)
+    endDate.setUTCDate(endDate.getUTCDate() + 1)
+
+    const [{ data: suggestions, error: suggestionsError }, { data: classifications, error: classificationsError }] = await Promise.all([
+      supabase
       .from('worship_song_suggestions' as never)
       .select('*')
-      .in('status', ['Analisada coletivamente', 'Analisada', 'Aprovada', 'Em teste', 'Repertório oficial'])
+      .gte('created_at', start)
+      .lt('created_at', endDate.toISOString())
       .order('created_at', { ascending: false })
-      .limit(8)
+      .limit(20),
+      supabase
+        .from('spiritual_intelligence_classifications' as never)
+        .select('suggestion_id, classification')
+        .eq('run_id', summary.run_id),
+    ])
 
-    if (error) throw error
+    if (suggestionsError) throw suggestionsError
+    if (classificationsError) throw classificationsError
 
-    const selected = ((suggestions ?? []) as unknown as WorshipSuggestionRow[]).slice(0, 5)
+    const topThemes = (summary.quantification?.themes ?? []).slice(0, 5).map((item) => item.label)
+    const classificationBySuggestion = new Map(
+      ((classifications ?? []) as unknown as RepertoireClassification[]).map((item) => [item.suggestion_id, item.classification]),
+    )
+    const selected = ((suggestions ?? []) as unknown as WorshipSuggestionRow[])
+      .map((suggestion) => {
+        const themes = classificationBySuggestion.get(suggestion.id)?.themes ?? []
+        const score = themes.filter((theme) => topThemes.includes(theme)).length
+        return { suggestion, themes, score }
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+
     if (selected.length === 0) return { success: false, message: 'Nenhuma indicação analisada disponível para sugerir repertório.' }
 
-    const suggestedSetlist = selected.map((suggestion, index) => ({
+    const suggestedSetlist = selected.map(({ suggestion, themes }, index) => ({
       position: index + 1,
       moment: normalizeSetlistMoment(suggestion.suggested_category) || (index === 0 ? 'Prévia' : index === selected.length - 1 ? 'Adoração' : 'Celebração'),
       suggestion_id: suggestion.id,
       title: suggestion.song_title,
       artist: suggestion.artist,
       youtube_url: suggestion.youtube_link,
-      reason: `Conecta ${suggestion.spiritual_area || 'a percepção congregacional'} com ${suggestion.next_step || 'o próximo passo pastoral'}.`,
+      reason: themes.length > 0 ? `Relacionada aos temas coletivos: ${themes.slice(0, 3).join(', ')}.` : 'Candidata recebida na mesma coleta coletiva; requer validação da liderança.',
     }))
 
     const { error: insertError } = await supabase.from('repertoire_suggestions' as never).insert({
       ministry_profile_id: ministryProfile?.id || null,
-      title: `Sugestão de repertório — ${new Date().toLocaleDateString('pt-BR')}`,
-      pastoral_direction: ministryProfile?.current_emphasis || 'Discernir direção pastoral a partir das indicações analisadas.',
+      title: `Sugestão de repertório — ${new Date(`${summary.analysis_date}T00:00:00`).toLocaleDateString('pt-BR')}`,
+      pastoral_direction: [ministryProfile?.current_emphasis, topThemes.length > 0 ? `Temas coletivos observados: ${topThemes.join(', ')}.` : null, summary.recommendations?.[0]].filter(Boolean).join(' '),
+      source_analysis_ids: [summary.id],
       suggested_setlist: suggestedSetlist,
       status: 'draft',
+      created_by: user.id,
     } as never)
 
     if (insertError) throw insertError
 
     revalidatePath('/louvor-admin')
-    return { success: true, message: 'Sugestão de repertório criada.' }
+    return { success: true, message: `Rascunho criado a partir da análise coletiva de ${summary.analysis_date}.` }
   } catch (error) {
     console.error('criarSugestaoRepertorio', error)
     return { success: false, message: 'Não foi possível criar sugestão de repertório.' }
