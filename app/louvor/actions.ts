@@ -126,6 +126,9 @@ function isMissingSuggestionColumnError(error: unknown) {
     || details.includes('song_key')
     || details.includes('youtube_video_id')
     || details.includes('age_range')
+    || details.includes('conversion_time')
+    || details.includes('participation_time')
+    || details.includes('region')
     || details.includes('lyrics_plain')
     || details.includes('metadata_payload')
 }
@@ -147,6 +150,9 @@ export async function salvarIndicacao(payload: {
   next_step_other?: string | null
   faixaEtaria?: string | null
   ministerio?: string | null
+  regiao?: string | null
+  tempoConversao?: string | null
+  tempoParticipacao?: string | null
   youtube_video_id?: string | null
   youtube_title?: string | null
   youtube_channel?: string | null
@@ -202,6 +208,9 @@ export async function salvarIndicacao(payload: {
       song_key: songKey,
       age_range: payload.faixaEtaria || null,
       ministry: payload.ministerio?.trim() || null,
+      region: payload.regiao?.trim() || null,
+      conversion_time: payload.tempoConversao || null,
+      participation_time: payload.tempoParticipacao || null,
       youtube_video_id: payload.youtube_video_id || null,
       youtube_title: payload.youtube_title?.trim() || null,
       youtube_channel: payload.youtube_channel?.trim() || null,

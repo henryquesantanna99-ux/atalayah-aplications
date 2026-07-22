@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { adicionarIndicacaoAoRepertorio, adicionarSugestaoRepertorioNaProximaEscala, atualizarMusicaVotacao, atualizarStatusIndicacao, criarSugestaoRepertorio, enviarMusicaParaVotacao, gerarAnaliseEspiritualDoDia } from './actions'
+import { adicionarIndicacaoAoRepertorio, adicionarSugestaoRepertorioNaProximaEscala, atualizarMusicaVotacao, atualizarStatusIndicacao, criarSugestaoRepertorio, enviarMusicaParaVotacao } from './actions'
+import { gerarAnaliseEspiritualDoDia } from './spiritual-intelligence-actions'
 
 type Suggestion = {
   id: string
@@ -32,6 +33,9 @@ type Suggestion = {
   youtube_thumbnail?: string | null
   age_range?: string | null
   ministry?: string | null
+  region?: string | null
+  conversion_time?: string | null
+  participation_time?: string | null
 }
 
 type VotingSong = {
@@ -72,17 +76,25 @@ type UpcomingEvent = {
 
 type SpiritualSummary = {
   id: string
+  run_id: string
   analysis_date: string
   quantification: { themes?: MetricCount[]; needs?: MetricCount[]; emotions?: MetricCount[]; nextSteps?: MetricCount[] }
   segmentation: Array<{ segment: string; value: string; total: number; topThemes?: MetricCount[] }>
   associations: Array<{ source: string; target: string; count: number; description: string }>
-  evolution: { note?: string; comparedDays?: number }
+  evolution: {
+    note?: string
+    comparedDays?: number
+    growing?: SpiritualTrend[]
+    declining?: SpiritualTrend[]
+    emerging?: SpiritualTrend[]
+  }
   discernment: string[]
   recommendations: string[]
   created_at: string
 }
 
 type MetricCount = { label: string; count: number; percentage: number }
+type SpiritualTrend = { category: 'themes' | 'needs' | 'emotions' | 'nextSteps'; label: string; current: number; previous: number; delta: number }
 
 type CatalogSong = {
   id: string
@@ -122,6 +134,8 @@ export function LouvorAdminClient({
   const [selectedSuggestionDate, setSelectedSuggestionDate] = useState('')
   const [selectedEventByRepertoire, setSelectedEventByRepertoire] = useState<Record<string, string>>({})
   const [draftSetlistByRepertoire, setDraftSetlistByRepertoire] = useState<Record<string, DraftSetlistSong[]>>({})
+  const [selectedRepertoireSummaryId, setSelectedRepertoireSummaryId] = useState(spiritualSummaries[0]?.id ?? '')
+  const selectedRepertoireSummary = spiritualSummaries.find((summary) => summary.id === selectedRepertoireSummaryId)
   const groupedSuggestions = useMemo(() => groupSuggestionsByDate(suggestions), [suggestions])
   const activeSuggestionGroup = groupedSuggestions.find((group) => group.dateKey === selectedSuggestionDate) ?? groupedSuggestions[0]
   const activeSuggestionDate = activeSuggestionGroup?.dateKey ?? ''
@@ -174,7 +188,7 @@ export function LouvorAdminClient({
 
   function createRepertoireSuggestion() {
     startTransition(async () => {
-      const response = await criarSugestaoRepertorio()
+      const response = await criarSugestaoRepertorio(selectedRepertoireSummaryId)
       if (response.success) toast.success(response.message)
       else toast.error(response.message)
     })
@@ -235,13 +249,17 @@ export function LouvorAdminClient({
     </section>
 
     {activeSection === 'repertorios' && <section className="rounded-2xl border border-brand/20 bg-gradient-to-br from-brand/15 to-navy-900 p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="grid gap-5 lg:grid-cols-[1fr,360px] lg:items-end">
         <div>
           <Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Análise ministerial</Badge>
           <h2 className="mt-3 text-xl font-bold text-white">Sugestão de repertório por análise</h2>
           <p className="mt-1 max-w-3xl text-sm text-[#CBD5E1]">Crie rascunhos de repertório a partir das análises coletivas e ajuste a ordem antes de enviar para uma escala.</p>
         </div>
-        <Button disabled={isPending} onClick={createRepertoireSuggestion} className="h-11 bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />Criar sugestão de repertório</Button>
+        <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
+          <div><Label htmlFor="repertoire-source-analysis">Análise coletiva de origem</Label><Select value={selectedRepertoireSummaryId} onValueChange={setSelectedRepertoireSummaryId}><SelectTrigger id="repertoire-source-analysis" className="mt-2 border-white/10 bg-black/20 text-white"><SelectValue placeholder="Selecione uma análise" /></SelectTrigger><SelectContent>{spiritualSummaries.map((summary) => <SelectItem key={summary.id} value={summary.id}>{new Date(`${summary.analysis_date}T00:00:00`).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent></Select></div>
+          {selectedRepertoireSummary && <p className="text-xs text-[#94A3B8]">Temas observados: {selectedRepertoireSummary.quantification?.themes?.slice(0, 3).map((theme) => theme.label).join(', ') || 'sem temas quantificados'}.</p>}
+          <Button disabled={isPending || !selectedRepertoireSummaryId} onClick={createRepertoireSuggestion} className="h-11 w-full bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />Criar rascunho recomendado</Button>
+        </div>
       </div>
       {repertoireSuggestions.length > 0 && <div className="mt-5 grid gap-3 lg:grid-cols-2">
         {repertoireSuggestions.map((item) => <article key={item.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
@@ -329,17 +347,33 @@ function AdminTab({ active, icon, label, onClick }: { active: boolean; icon: Rea
 }
 
 function SpiritualIntelligencePanel({ groups, summaries, activeDate, isPending, onSelectDate, onRunAnalysis }: { groups: ReturnType<typeof groupSuggestionsByDate>; summaries: SpiritualSummary[]; activeDate: string; isPending: boolean; onSelectDate: (date: string) => void; onRunAnalysis: (date: string) => void }) {
+  const [activeView, setActiveView] = useState<'panorama' | 'segmentacao' | 'associacoes' | 'evolucao'>('panorama')
   const activeGroup = groups.find((group) => group.dateKey === activeDate) ?? groups[0]
-  const activeSummary = summaries.find((summary) => summary.analysis_date === activeGroup?.dateKey) ?? summaries[0]
-  const summary = activeSummary
+  const summary = summaries.find((item) => item.analysis_date === activeGroup?.dateKey)
   return <section className="grid gap-5 xl:grid-cols-[300px,1fr]">
     <aside className="rounded-2xl border border-white/[0.08] bg-navy-900 p-4"><Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Análises por dia</Badge><h2 className="mt-3 text-xl font-bold text-white">Inteligência Espiritual</h2><p className="mt-1 text-sm text-[#94A3B8]">Uma análise coletiva por data. O sistema organiza evidências; o discernimento pertence à liderança.</p><div className="mt-4 grid gap-2">{groups.map((group) => <button key={group.dateKey} type="button" onClick={() => onSelectDate(group.dateKey)} className={`rounded-xl border p-3 text-left transition ${activeGroup?.dateKey === group.dateKey ? 'border-brand/50 bg-brand/10' : 'border-white/10 bg-black/20 hover:border-brand/30'}`}><p className="font-semibold text-white">{group.label}</p><p className="text-sm text-[#94A3B8]">{group.suggestions.length} indicação{group.suggestions.length === 1 ? '' : 'ões'}</p></button>)}</div></aside>
-    <div className="space-y-5"><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><h3 className="text-xl font-bold text-white">{activeGroup?.label ?? 'Sem data selecionada'}</h3><p className="mt-1 text-sm text-[#94A3B8]">Fluxo: letra da música + motivo + área trabalhada + próximo passo de todas as indicações do dia.</p></div><Button type="button" disabled={isPending || !activeGroup || activeGroup.dateKey === 'sem-data'} onClick={() => activeGroup && onRunAnalysis(activeGroup.dateKey)} className="bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />Gerar análise coletiva do dia</Button></div></section>{summary ? <DailySummary summary={summary} /> : <p className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5 text-sm text-[#94A3B8]">Ainda não há análise coletiva salva. Clique no botão acima para gerar o panorama do dia.</p>}</div>
+    <div className="space-y-5"><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-xl font-bold text-white">{activeGroup?.label ?? 'Sem data selecionada'}</h3><Badge variant="outline" className={summary ? 'border-emerald-400/30 text-emerald-200' : 'border-amber-400/30 text-amber-200'}>{summary ? 'Análise disponível' : 'Pendente'}</Badge></div><p className="mt-1 text-sm text-[#94A3B8]">Fluxo: letra da música + motivo + área trabalhada + próximo passo de todas as indicações do dia.</p></div><Button type="button" disabled={isPending || !activeGroup || activeGroup.dateKey === 'sem-data'} onClick={() => activeGroup && onRunAnalysis(activeGroup.dateKey)} className="bg-brand hover:bg-brand/90"><Sparkles className="h-4 w-4" />{summary ? 'Regerar análise coletiva' : 'Gerar análise coletiva do dia'}</Button></div></section>{summary ? <><div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/[0.08] bg-navy-900 p-2 sm:grid-cols-4">{([['panorama', 'Panorama'], ['segmentacao', 'Segmentação'], ['associacoes', 'Associações'], ['evolucao', 'Evolução']] as const).map(([view, label]) => <Button key={view} type="button" size="sm" variant={activeView === view ? 'default' : 'ghost'} onClick={() => setActiveView(view)} className={activeView === view ? 'bg-brand text-white hover:bg-brand/90' : 'text-[#CBD5E1] hover:bg-white/10 hover:text-white'}>{label}</Button>)}</div><DailySummary summary={summary} activeView={activeView} /></> : <p className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5 text-sm text-[#94A3B8]">Ainda não há análise coletiva salva para esta data. Clique no botão acima para gerar o panorama do dia.</p>}</div>
   </section>
 }
 
-function DailySummary({ summary }: { summary: SpiritualSummary }) {
-  return <div className="space-y-5"><section className="grid gap-4 lg:grid-cols-2"><MetricChart title="Temas espirituais" items={summary.quantification?.themes ?? []} /><MetricChart title="Necessidades" items={summary.quantification?.needs ?? []} /><MetricChart title="Emoções recorrentes" items={summary.quantification?.emotions ?? []} /><MetricChart title="Próximos passos" items={summary.quantification?.nextSteps ?? []} /></section><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Segmentação</h3><div className="mt-4 grid gap-3 md:grid-cols-2">{summary.segmentation?.slice(0, 8).map((item) => <div key={`${item.segment}-${item.value}`} className="rounded-xl border border-white/10 bg-black/20 p-3"><p className="font-semibold text-white">{item.segment}: {item.value}</p><p className="text-sm text-[#94A3B8]">{item.total} indicação{item.total === 1 ? '' : 'ões'}</p><p className="mt-2 text-xs text-[#CBD5E1]">{item.topThemes?.map((theme) => theme.label).join(', ') || 'Sem tema recorrente'}</p></div>)}</div></section><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Associações sem causalidade</h3><div className="mt-3 grid gap-2">{summary.associations?.map((item) => <p key={`${item.source}-${item.target}`} className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-[#CBD5E1]">{item.description}</p>)}</div></section><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Discernimento e resposta ministerial</h3><p className="mt-2 text-sm text-[#94A3B8]">{summary.evolution?.note}</p><div className="mt-4 grid gap-3 lg:grid-cols-2"><div>{summary.discernment?.map((item) => <p key={item} className="mb-2 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-[#CBD5E1]">{item}</p>)}</div><div>{summary.recommendations?.map((item) => <p key={item} className="mb-2 rounded-xl border border-brand/20 bg-brand/10 p-3 text-sm text-[#CBD5E1]">{item}</p>)}</div></div></section></div>
+function DailySummary({ summary, activeView }: { summary: SpiritualSummary; activeView: 'panorama' | 'segmentacao' | 'associacoes' | 'evolucao' }) {
+  if (activeView === 'segmentacao') return <SegmentSummaryPanel items={summary.segmentation ?? []} />
+  if (activeView === 'associacoes') return <AssociationSummaryPanel items={summary.associations ?? []} />
+  if (activeView === 'evolucao') return <EvolutionSummaryPanel evolution={summary.evolution} />
+  return <div className="space-y-5"><section className="grid gap-4 lg:grid-cols-2"><MetricChart title="Temas espirituais" items={summary.quantification?.themes ?? []} /><MetricChart title="Necessidades" items={summary.quantification?.needs ?? []} /><MetricChart title="Emoções recorrentes" items={summary.quantification?.emotions ?? []} /><MetricChart title="Próximos passos" items={summary.quantification?.nextSteps ?? []} /></section><section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Discernimento e resposta ministerial</h3><p className="mt-2 text-sm text-[#94A3B8]">O sistema organiza evidências coletivas; a interpretação e a decisão permanecem com a liderança.</p><div className="mt-4 grid gap-3 lg:grid-cols-2"><div>{summary.discernment?.map((item) => <p key={item} className="mb-2 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-[#CBD5E1]">{item}</p>)}</div><div>{summary.recommendations?.map((item) => <p key={item} className="mb-2 rounded-xl border border-brand/20 bg-brand/10 p-3 text-sm text-[#CBD5E1]">{item}</p>)}</div></div></section></div>
+}
+
+function SegmentSummaryPanel({ items }: { items: SpiritualSummary['segmentation'] }) {
+  return <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Distribuição dos padrões por grupo</h3><p className="mt-1 text-sm text-[#94A3B8]">A segmentação ajuda a localizar recorrências coletivas sem avaliar pessoas individualmente.</p><div className="mt-4 grid gap-3 md:grid-cols-2">{items.length > 0 ? items.map((item) => <div key={`${item.segment}-${item.value}`} className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="flex items-center justify-between gap-3"><p className="font-semibold capitalize text-white">{item.segment}: {item.value}</p><Badge variant="outline" className="border-white/10 text-[#CBD5E1]">{item.total}</Badge></div><p className="mt-2 text-xs text-[#CBD5E1]">{item.topThemes?.map((theme) => `${theme.label} (${theme.percentage}%)`).join(', ') || 'Sem tema recorrente'}</p></div>) : <p className="text-sm text-[#94A3B8]">Sem dados de segmentação para esta data.</p>}</div></section>
+}
+
+function AssociationSummaryPanel({ items }: { items: SpiritualSummary['associations'] }) {
+  return <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Associações sem causalidade</h3><p className="mt-1 text-sm text-[#94A3B8]">Estas combinações apareceram juntas; o sistema não afirma que uma causa a outra.</p><div className="mt-4 grid gap-3 md:grid-cols-2">{items.length > 0 ? items.map((item) => <div key={`${item.source}-${item.target}`} className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="font-semibold text-white">{item.source} + {item.target}</p><p className="mt-2 text-sm text-[#CBD5E1]">{item.description}</p></div>) : <p className="text-sm text-[#94A3B8]">Sem associações recorrentes para esta data.</p>}</div></section>
+}
+
+function EvolutionSummaryPanel({ evolution }: { evolution: SpiritualSummary['evolution'] }) {
+  const groups = [{ title: 'Em crescimento', items: evolution.growing ?? [], tone: 'text-emerald-200' }, { title: 'Novos padrões', items: evolution.emerging ?? [], tone: 'text-brand' }, { title: 'Em redução', items: evolution.declining ?? [], tone: 'text-amber-200' }]
+  return <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-5"><h3 className="text-lg font-bold text-white">Evolução entre coletas</h3><p className="mt-1 text-sm text-[#94A3B8]">{evolution.note || 'Ainda não há histórico suficiente para comparar tendências.'}</p><div className="mt-5 grid gap-4 lg:grid-cols-3">{groups.map((group) => <article key={group.title} className="rounded-xl border border-white/10 bg-black/20 p-4"><h4 className={`font-semibold ${group.tone}`}>{group.title}</h4><div className="mt-3 space-y-2">{group.items.length > 0 ? group.items.map((item) => <div key={`${item.category}-${item.label}`} className="rounded-lg bg-white/[0.04] p-3"><p className="text-sm font-medium text-white">{item.label}</p><p className="mt-1 text-xs text-[#94A3B8]">{item.previous}% → {item.current}% ({item.delta > 0 ? '+' : ''}{item.delta} p.p.)</p></div>) : <p className="text-sm text-[#94A3B8]">Nenhuma variação relevante.</p>}</div></article>)}</div></section>
 }
 
 function MetricChart({ title, items }: { title: string; items: MetricCount[] }) {
