@@ -180,6 +180,15 @@ export function CatalogTable({ variations, isEditor }: CatalogTableProps) {
                 <tr key={v.id} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors group">
                   <td className="py-3 px-4">
                     <p className="text-sm font-medium text-white">{v.songs?.title}</p>
+                    <details className="mt-1 max-w-md text-xs text-[#94A3B8]">
+                      <summary className="cursor-pointer text-brand hover:text-brand-light">Informações</summary>
+                      <div className="mt-2 space-y-1 rounded-card border border-white/[0.08] bg-navy-900 p-3">
+                        <p><strong className="text-white">Tom:</strong> {v.key_note ?? v.songs?.default_key ?? '—'} · <strong className="text-white">BPM:</strong> {v.songs?.bpm ?? '—'}</p>
+                        <p><strong className="text-white">Álbum:</strong> {v.songs?.album_name ?? '—'} · <strong className="text-white">Duração:</strong> {v.songs?.youtube_duration ?? '—'}</p>
+                        {v.songs?.lyrics_plain && <p className="max-h-32 whitespace-pre-wrap overflow-y-auto border-t border-white/[0.06] pt-2">{v.songs.lyrics_plain}</p>}
+                        <p className="text-[10px] text-[#64748B]">Fonte: {v.songs?.metadata_source ?? 'cadastro manual'}</p>
+                      </div>
+                    </details>
                     {v.youtube_url && (
                       <a href={v.youtube_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand hover:text-brand-light mt-0.5">
                         <ExternalLink className="w-3 h-3" />

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit } from '@/lib/permissions'
+import type { Json } from '@/types/database'
 
 async function requireEditor() {
   const supabase = await createClient()
@@ -20,6 +21,15 @@ export async function addCatalogSong(input: {
   soloistId: string | null
   version: string | null
   youtubeUrl: string | null
+  youtubeVideoId: string | null
+  youtubeThumbnail: string | null
+  youtubeDuration: string | null
+  bpm: number | null
+  lyricsPlain: string | null
+  lyricsSynced: string | null
+  albumName: string | null
+  metadataSource: string | null
+  metadataPayload: Json
 }) {
   const { supabase, user } = await requireEditor()
 
@@ -34,6 +44,15 @@ export async function addCatalogSong(input: {
 
   if (existingSong?.id) {
     songId = existingSong.id
+    const { error: updateError } = await supabase.from('songs').update({
+      title: input.title.trim(), artist: input.artist, youtube_url: input.youtubeUrl,
+      youtube_video_id: input.youtubeVideoId, youtube_thumbnail: input.youtubeThumbnail,
+      youtube_duration: input.youtubeDuration, default_key: input.keyNote, bpm: input.bpm,
+      lyrics_plain: input.lyricsPlain, lyrics_synced: input.lyricsSynced, album_name: input.albumName,
+      metadata_source: input.metadataSource, metadata_payload: input.metadataPayload,
+      metadata_fetched_at: input.metadataSource ? new Date().toISOString() : null,
+    }).eq('id', songId)
+    if (updateError) throw new Error(updateError.message)
   } else {
     const { data: newSong, error: songError } = await supabase
       .from('songs')
@@ -42,6 +61,16 @@ export async function addCatalogSong(input: {
         artist: input.artist || null,
         youtube_url: input.youtubeUrl || null,
         default_key: input.keyNote || null,
+        youtube_video_id: input.youtubeVideoId,
+        youtube_thumbnail: input.youtubeThumbnail,
+        youtube_duration: input.youtubeDuration,
+        bpm: input.bpm,
+        lyrics_plain: input.lyricsPlain,
+        lyrics_synced: input.lyricsSynced,
+        album_name: input.albumName,
+        metadata_source: input.metadataSource,
+        metadata_payload: input.metadataPayload,
+        metadata_fetched_at: input.metadataSource ? new Date().toISOString() : null,
         created_by: user.id,
       })
       .select('id')
