@@ -6,13 +6,15 @@ import { toast } from 'sonner'
 import { MomentBadge } from '@/components/ui/moment-badge'
 import type { SongVariationWithDetails } from '@/types/database'
 import { deleteCatalogSong } from './catalog-actions'
+import { AddCatalogSongModal } from './add-catalog-song-modal'
 
 interface CatalogTableProps {
   variations: SongVariationWithDetails[]
   isEditor: boolean
+  profiles: Array<{ id: string; full_name: string | null }>
 }
 
-export function CatalogTable({ variations, isEditor }: CatalogTableProps) {
+export function CatalogTable({ variations, isEditor, profiles }: CatalogTableProps) {
   const [filters, setFilters] = useState({
     title: '',
     artist: '',
@@ -85,14 +87,11 @@ export function CatalogTable({ variations, isEditor }: CatalogTableProps) {
                   <p className="text-sm font-semibold text-white">{v.songs?.title}</p>
                   <p className="text-xs text-[#94A3B8]">{v.artist ?? v.songs?.artist ?? '—'}</p>
                 </div>
-                {isEditor && !v.is_virtual && (
-                  <button
-                    onClick={() => handleDelete(v.id, v.songs?.title ?? '')}
-                    disabled={deleting === v.id}
-                    className="p-1.5 rounded text-[#64748B] hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                {isEditor && (
+                  <div className="flex items-center gap-1">
+                    <SongEditModal variation={v} profiles={profiles} />
+                    {!v.is_virtual && <button onClick={() => handleDelete(v.id, v.songs?.title ?? '')} disabled={deleting === v.id} className="p-1.5 rounded text-[#64748B] hover:text-red-400 hover:bg-red-400/10 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>}
+                  </div>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -223,16 +222,19 @@ export function CatalogTable({ variations, isEditor }: CatalogTableProps) {
                   </td>
                   {isEditor && (
                     <td className="py-3 px-4">
-                      {!v.is_virtual && (
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                        <SongEditModal variation={v} profiles={profiles} />
+                        {!v.is_virtual && (
                         <button
                           onClick={() => handleDelete(v.id, v.songs?.title ?? '')}
                           disabled={deleting === v.id}
                           aria-label="Remover do catálogo"
-                          className="p-1.5 rounded text-[#64748B] hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-40"
+                          className="p-1.5 rounded text-[#64748B] hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-40"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      )}
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -248,6 +250,29 @@ export function CatalogTable({ variations, isEditor }: CatalogTableProps) {
       </p>
     </div>
   )
+}
+
+function SongEditModal({ variation, profiles }: { variation: SongVariationWithDetails; profiles: Array<{ id: string; full_name: string | null }> }) {
+  return <AddCatalogSongModal profiles={profiles} song={{
+    songId: variation.song_id,
+    variationId: variation.is_virtual ? null : variation.id,
+    title: variation.songs.title,
+    artist: variation.artist ?? variation.songs.artist,
+    keyNote: variation.key_note ?? variation.songs.default_key,
+    moment: variation.moment,
+    soloistId: variation.soloist_id,
+    version: variation.version,
+    youtubeUrl: variation.youtube_url ?? variation.songs.youtube_url,
+    youtubeVideoId: variation.songs.youtube_video_id,
+    youtubeThumbnail: variation.songs.youtube_thumbnail,
+    youtubeDuration: variation.songs.youtube_duration,
+    bpm: variation.songs.bpm,
+    lyricsPlain: variation.songs.lyrics_plain,
+    lyricsSynced: variation.songs.lyrics_synced,
+    albumName: variation.songs.album_name,
+    metadataSource: variation.songs.metadata_source,
+    metadataPayload: variation.songs.metadata_payload,
+  }} />
 }
 
 function EmptyState({ isEditor }: { isEditor: boolean }) {

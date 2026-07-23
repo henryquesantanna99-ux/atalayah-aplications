@@ -18,11 +18,11 @@ export default async function MusicasPage() {
   const [{ data: variationsData }, { data: songsData }] = await Promise.all([
     supabase
       .from('song_variations')
-      .select('*, songs(id, title, artist, youtube_url, youtube_duration, bpm, default_key, album_name, lyrics_plain, metadata_source), profiles(id, full_name)')
+      .select('*, songs(id, title, artist, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload), profiles(id, full_name)')
       .order('created_at', { ascending: false }),
     supabase
       .from('songs')
-      .select('id, title, artist, youtube_url, youtube_duration, bpm, default_key, album_name, lyrics_plain, metadata_source, created_at, song_stems(id, stem_type, original_file_name)')
+      .select('id, title, artist, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload, created_at, song_stems(id, stem_type, original_file_name)')
       .order('created_at', { ascending: false }),
   ])
 
@@ -52,6 +52,7 @@ export default async function MusicasPage() {
         <CatalogTable
           variations={variations}
           isEditor={isEditor}
+          profiles={activeProfiles ?? []}
         />
       </div>
       <LaiaFloatingBadge tip="Sugestão de músicas para o culto" />
@@ -66,12 +67,16 @@ function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): Song
     title: string
     artist: string | null
     youtube_url: string | null
+    youtube_video_id: string | null
+    youtube_thumbnail: string | null
     youtube_duration: string | null
     bpm: number | null
     default_key: string | null
     album_name: string | null
     lyrics_plain: string | null
+    lyrics_synced: string | null
     metadata_source: string | null
+    metadata_payload: import('@/types/database').Json
     created_at: string
     song_stems?: Array<{ id: string; stem_type: string; original_file_name: string | null }> | null
   }>
@@ -100,12 +105,16 @@ function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): Song
         title: song.title,
         artist: song.artist,
         youtube_url: song.youtube_url,
+        youtube_video_id: song.youtube_video_id,
+        youtube_thumbnail: song.youtube_thumbnail,
         youtube_duration: song.youtube_duration,
         bpm: song.bpm,
         default_key: song.default_key,
         album_name: song.album_name,
         lyrics_plain: song.lyrics_plain,
+        lyrics_synced: song.lyrics_synced,
         metadata_source: song.metadata_source,
+        metadata_payload: song.metadata_payload,
       },
       profiles: null,
       song_stems: song.song_stems ?? [],

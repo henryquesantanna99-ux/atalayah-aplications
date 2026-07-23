@@ -5,15 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { canEdit } from '@/lib/permissions'
 import type { Json } from '@/types/database'
 
-async function requireEditor() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
-  if (!canEdit(user.email)) throw new Error('Forbidden')
-  return { supabase, user }
-}
-
-export async function addCatalogSong(input: {
+export interface CatalogSongInput {
   title: string
   artist: string | null
   keyNote: string | null
@@ -30,7 +22,17 @@ export async function addCatalogSong(input: {
   albumName: string | null
   metadataSource: string | null
   metadataPayload: Json
-}) {
+}
+
+async function requireEditor() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+  if (!canEdit(user.email)) throw new Error('Forbidden')
+  return { supabase, user }
+}
+
+export async function addCatalogSong(input: CatalogSongInput) {
   const { supabase, user } = await requireEditor()
 
   // Upsert the base song record (by title + artist)
@@ -97,6 +99,30 @@ export async function addCatalogSong(input: {
   revalidatePath('/musicas')
 
   return { songId, variationId: variation.id }
+}
+
+export async function editCatalogSong(songId: string, variationId: string | null, input: CatalogSongInput) {
+  const { supabase } = await requireEditor()
+  const { error: songError } = await supabase.from('songs').update({
+    title: input.title.trim(), artist: input.artist, youtube_url: input.youtubeUrl,
+    youtube_video_id: input.youtubeVideoId, youtube_thumbnail: input.youtubeThumbnail,
+    youtube_duration: input.youtubeDuration, default_key: input.keyNote, bpm: input.bpm,
+    lyrics_plain: input.lyricsPlain, lyrics_synced: input.lyricsSynced, album_name: input.albumName,
+    metadata_source: input.metadataSource, metadata_payload: input.metadataPayload,
+    metadata_fetched_at: input.metadataSource ? new Date().toISOString() : null,
+  }).eq('id', songId)
+  if (songError) throw new Error(songError.message)
+
+  if (variationId) {
+    const { error: variationError } = await supabase.from('song_variations').update({
+      artist: input.artist, key_note: input.keyNote,
+      moment: (input.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null) || null,
+      soloist_id: input.soloistId, version: input.version, youtube_url: input.youtubeUrl,
+    }).eq('id', variationId)
+    if (variationError) throw new Error(variationError.message)
+  }
+  revalidatePath('/musicas')
+  return { songId, variationId }
 }
 
 export async function deleteCatalogSong(variationId: string) {

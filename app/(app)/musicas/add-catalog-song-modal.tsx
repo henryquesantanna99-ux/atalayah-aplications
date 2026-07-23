@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { Check, FolderUp, Loader2, Plus, X } from 'lucide-react'
+import { Check, FolderUp, Loader2, Pencil, Plus, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { buildStemStoragePath, detectStemType, isAudioFileName } from '@/lib/stem-utils'
-import { addCatalogSong } from './catalog-actions'
+import { addCatalogSong, editCatalogSong } from './catalog-actions'
 import type { Json } from '@/types/database'
 
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
@@ -28,6 +28,26 @@ interface Profile {
 
 interface AddCatalogSongModalProps {
   profiles: Profile[]
+  song?: {
+    songId: string
+    variationId: string | null
+    title: string
+    artist: string | null
+    keyNote: string | null
+    moment: string | null
+    soloistId: string | null
+    version: string | null
+    youtubeUrl: string | null
+    youtubeVideoId: string | null
+    youtubeThumbnail: string | null
+    youtubeDuration: string | null
+    bpm: number | null
+    lyricsPlain: string | null
+    lyricsSynced: string | null
+    albumName: string | null
+    metadataSource: string | null
+    metadataPayload: Json
+  }
 }
 
 const emptyForm = {
@@ -65,12 +85,21 @@ function getRelativeFilePath(file: File) {
   return relativePath && relativePath.length > 0 ? relativePath : file.name
 }
 
-export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
+export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps) {
   const router = useRouter()
   const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState(emptyForm)
+  const isEditing = Boolean(song)
+  const initialForm = song ? {
+    title: song.title, artist: song.artist ?? '', key_note: song.keyNote ?? '', moment: song.moment ?? '',
+    soloist_id: song.soloistId ?? '', version: song.version ?? '', youtube_url: song.youtubeUrl ?? '',
+    youtube_video_id: song.youtubeVideoId ?? '', youtube_thumbnail: song.youtubeThumbnail ?? '',
+    youtube_duration: song.youtubeDuration ?? '', bpm: song.bpm ? String(song.bpm) : '',
+    lyrics_plain: song.lyricsPlain ?? '', lyrics_synced: song.lyricsSynced ?? '', album_name: song.albumName ?? '',
+    metadata_source: song.metadataSource ?? '', metadata_payload: song.metadataPayload ?? {},
+  } : emptyForm
+  const [form, setForm] = useState(initialForm)
   const [multitrackFiles, setMultitrackFiles] = useState<File[]>([])
   const [youtubeResults, setYoutubeResults] = useState<YouTubeResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -196,7 +225,7 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
 
     setSaving(true)
     try {
-      const result = await addCatalogSong({
+      const payload = {
         title: form.title.trim(),
         artist: form.artist || null,
         keyNote: form.key_note || null,
@@ -213,13 +242,16 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
         albumName: form.album_name || null,
         metadataSource: form.metadata_source || null,
         metadataPayload: form.metadata_payload,
-      })
+      }
+      const result = song
+        ? await editCatalogSong(song.songId, song.variationId, payload)
+        : await addCatalogSong(payload)
 
       await uploadMultitracks(result.songId)
 
-      toast.success('Música adicionada ao catálogo.')
+      toast.success(isEditing ? 'Música atualizada.' : 'Música adicionada ao catálogo.')
       setOpen(false)
-      setForm(emptyForm)
+      setForm(initialForm)
       setMultitrackFiles([])
       router.refresh()
     } catch (error) {
@@ -230,16 +262,16 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (value) setForm(initialForm) }}>
       <DialogTrigger asChild>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors">
-          <Plus className="w-4 h-4" aria-hidden="true" />
-          Adicionar Nova Música
+        <button aria-label={isEditing ? `Editar ${song?.title}` : 'Adicionar nova música'} className={isEditing ? 'rounded p-1.5 text-[#64748B] hover:bg-white/[0.06] hover:text-white' : 'flex items-center gap-2 px-4 py-2 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors'}>
+          {isEditing ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="w-4 h-4" aria-hidden="true" />}
+          {!isEditing && 'Adicionar Nova Música'}
         </button>
       </DialogTrigger>
       <DialogContent className="bg-navy-900 border border-white/[0.08] text-white max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-white">Adicionar ao Catálogo</DialogTitle>
+          <DialogTitle className="text-white">{isEditing ? 'Editar Música' : 'Adicionar ao Catálogo'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="grid grid-cols-2 gap-3">
@@ -429,7 +461,7 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
               disabled={saving}
               className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60"
             >
-              {saving ? 'Salvando...' : 'Adicionar'}
+              {saving ? 'Salvando...' : (isEditing ? 'Salvar alterações' : 'Adicionar')}
             </button>
           </div>
         </form>

@@ -634,7 +634,7 @@ export type LaiaMessageInsert = Database['public']['Tables']['laia_messages']['I
 export type LaiaUsage = Database['public']['Tables']['laia_usage']['Row']
 
 export interface SongVariationWithDetails extends SongVariation {
-  songs: Pick<Song, 'id' | 'title' | 'artist' | 'youtube_url' | 'youtube_duration' | 'bpm' | 'default_key' | 'album_name' | 'lyrics_plain' | 'metadata_source'>
+  songs: Pick<Song, 'id' | 'title' | 'artist' | 'youtube_video_id' | 'youtube_url' | 'youtube_thumbnail' | 'youtube_duration' | 'bpm' | 'default_key' | 'album_name' | 'lyrics_plain' | 'lyrics_synced' | 'metadata_source' | 'metadata_payload'>
   profiles: Pick<Profile, 'id' | 'full_name'> | null
   song_stems?: Pick<SongStem, 'id' | 'stem_type' | 'original_file_name'>[]
   is_virtual?: boolean
