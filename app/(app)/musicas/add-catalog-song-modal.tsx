@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Check, FolderUp, Loader2, Plus, X } from 'lucide-react'
 import {
   Dialog,
@@ -260,7 +261,7 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
                 <div className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-card border border-white/[0.08] bg-navy-800 p-2">
                   {youtubeResults.map((result) => (
                     <div key={result.videoId} className="flex items-center gap-3 rounded-card bg-navy-900 p-2">
-                      {result.thumbnail && <img src={result.thumbnail} alt="" className="h-12 w-20 rounded object-cover" />}
+                      {result.thumbnail && <Image src={result.thumbnail} alt="" width={80} height={48} className="h-12 w-20 rounded object-cover" />}
                       <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-white">{result.title}</p><p className="truncate text-[11px] text-[#64748B]">{result.artist}</p></div>
                       <button type="button" disabled={enriching} onClick={() => confirmYoutubeResult(result)} className="inline-flex items-center gap-1 rounded-card bg-brand px-2 py-1.5 text-xs text-white disabled:opacity-50"><Check className="h-3.5 w-3.5" />Confirmar</button>
                     </div>
