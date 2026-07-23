@@ -287,6 +287,7 @@ export function EventFormModal({
   async function handleOpenChange(val: boolean) {
     if (val && event) await loadExistingEvent()
     setOpen(val)
+    if (val && event) void loadExistingEvent()
     if (!val) {
       setStep(1)
       setSelectedMembers({})
