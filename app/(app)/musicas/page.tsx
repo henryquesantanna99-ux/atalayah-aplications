@@ -18,11 +18,11 @@ export default async function MusicasPage() {
   const [{ data: variationsData }, { data: songsData }] = await Promise.all([
     supabase
       .from('song_variations')
-      .select('*, songs(id, title, artist, youtube_url), profiles(id, full_name)')
+      .select('*, songs(id, title, artist, youtube_url, youtube_duration, bpm, default_key, album_name, lyrics_plain, metadata_source), profiles(id, full_name)')
       .order('created_at', { ascending: false }),
     supabase
       .from('songs')
-      .select('id, title, artist, youtube_url, created_at, song_stems(id, stem_type, original_file_name)')
+      .select('id, title, artist, youtube_url, youtube_duration, bpm, default_key, album_name, lyrics_plain, metadata_source, created_at, song_stems(id, stem_type, original_file_name)')
       .order('created_at', { ascending: false }),
   ])
 
@@ -66,6 +66,12 @@ function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): Song
     title: string
     artist: string | null
     youtube_url: string | null
+    youtube_duration: string | null
+    bpm: number | null
+    default_key: string | null
+    album_name: string | null
+    lyrics_plain: string | null
+    metadata_source: string | null
     created_at: string
     song_stems?: Array<{ id: string; stem_type: string; original_file_name: string | null }> | null
   }>
@@ -94,6 +100,12 @@ function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): Song
         title: song.title,
         artist: song.artist,
         youtube_url: song.youtube_url,
+        youtube_duration: song.youtube_duration,
+        bpm: song.bpm,
+        default_key: song.default_key,
+        album_name: song.album_name,
+        lyrics_plain: song.lyrics_plain,
+        metadata_source: song.metadata_source,
       },
       profiles: null,
       song_stems: song.song_stems ?? [],
