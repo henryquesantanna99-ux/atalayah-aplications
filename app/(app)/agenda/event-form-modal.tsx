@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { updateEvent, createScale } from './actions'
+import { createScale } from './actions'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
@@ -160,6 +160,7 @@ export function EventFormModal({
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
+  const [loadingExisting, setLoadingExisting] = useState(false)
   const [catalogSongs, setCatalogSongs] = useState<CatalogSong[]>([])
   const [catalogLoaded, setCatalogLoaded] = useState(false)
   const [songSearchByDraft, setSongSearchByDraft] = useState<Record<string, string>>({})
@@ -253,8 +254,45 @@ export function EventFormModal({
     setSongs((prev) => prev.map((s) => s.id === id ? { ...s, [field]: value } : s))
   }
 
+  async function loadExistingEvent() {
+    if (!event) return
+    setLoadingExisting(true)
+    try {
+      const [{ data: memberRows, error: memberError }, { data: songRows, error: songError }] = await Promise.all([
+        supabase.from('event_members').select('profile_id, instrument').eq('event_id', event.id),
+        supabase
+          .from('setlist_songs')
+          .select('id, song_id, song_title, artist, key_note, moment, soloist_id, version, reference_link, order_index')
+          .eq('event_id', event.id)
+          .order('order_index'),
+      ])
+      if (memberError) throw memberError
+      if (songError) throw songError
+      setSelectedMembers(Object.fromEntries((memberRows ?? []).map((row) => [row.profile_id, row.instrument ?? ''])))
+      setSongs((songRows ?? []).length > 0
+        ? (songRows ?? []).map((row) => ({
+            id: row.id,
+            catalogVariationId: null,
+            songId: row.song_id,
+            title: row.song_title,
+            artist: row.artist ?? '',
+            keyNote: row.key_note ?? '',
+            moment: row.moment ?? '',
+            soloistId: row.soloist_id ?? '',
+            version: row.version ?? '',
+            youtubeUrl: row.reference_link ?? '',
+          }))
+        : [newSongDraft()])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao carregar a escala do evento.')
+    } finally {
+      setLoadingExisting(false)
+    }
+  }
+
   function handleOpenChange(val: boolean) {
     setOpen(val)
+    if (val && event) void loadExistingEvent()
     if (!val) {
       setStep(1)
       setSelectedMembers({})
@@ -275,28 +313,7 @@ export function EventFormModal({
     setStep((s) => s + 1)
   }
 
-  async function handleSubmitEdit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!event) return
-    if (!form.title.trim()) {
-      toast.error('Informe o título do evento.')
-      return
-    }
-    setSaving(true)
-    const payload = buildPayload()
-    try {
-      await updateEvent(event.id, payload)
-      toast.success('Evento atualizado.')
-      setOpen(false)
-      router.refresh()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao salvar evento.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleSubmitCreate() {
+  async function handleSubmit() {
     if (!form.title.trim()) {
       toast.error('Informe o título do evento.')
       return
@@ -311,10 +328,11 @@ export function EventFormModal({
     setSaving(true)
     try {
       await createScale({
-        eventId: null,
+        eventId: event?.id ?? null,
         event: buildPayload(),
         members,
         songs: validSongs.map((s) => ({
+          setlistSongId: s.id,
           songId: s.songId ?? null,
           songTitle: s.title,
           artist: s.artist || null,
@@ -325,7 +343,7 @@ export function EventFormModal({
           referenceLink: s.youtubeUrl || null,
         })),
       })
-      toast.success('Evento criado com sucesso.')
+      toast.success(isEditing ? 'Evento atualizado com sucesso.' : 'Evento criado com sucesso.')
       handleOpenChange(false)
       router.refresh()
     } catch (err) {
@@ -386,8 +404,7 @@ export function EventFormModal({
           </DialogTitle>
         </DialogHeader>
 
-        {!isEditing && (
-          <div className="flex items-center gap-2 mt-1 mb-2">
+        <div className="flex items-center gap-2 mt-1 mb-2">
             {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium transition-colors ${
@@ -401,20 +418,11 @@ export function EventFormModal({
                 {s < totalSteps && <div className="w-8 h-px bg-white/[0.08]" />}
               </div>
             ))}
-          </div>
-        )}
+        </div>
 
-        {isEditing && (
-          <form onSubmit={handleSubmitEdit} className="space-y-4 mt-2">
-            <Step1Fields form={form} profiles={profiles} onChange={handleChange} inputClass={inputClass} />
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setOpen(false)} className="flex-1 py-2.5 rounded-card border border-white/[0.08] text-[#94A3B8] text-sm hover:bg-white/[0.04] transition-colors">Cancelar</button>
-              <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button>
-            </div>
-          </form>
-        )}
-
-        {!isEditing && (
+        {loadingExisting ? (
+          <p className="py-8 text-center text-sm text-[#94A3B8]">Carregando evento...</p>
+        ) : (
           <div className="space-y-5 mt-2">
             {step === 1 && (
               <div className="space-y-4">
@@ -461,7 +469,7 @@ export function EventFormModal({
                   {form.type === 'culto' ? (
                     <button type="button" onClick={handleNext} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors">Próximo →</button>
                   ) : (
-                    <button type="button" onClick={handleSubmitCreate} disabled={saving} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60">{saving ? 'Criando...' : 'Criar Evento'}</button>
+                    <button type="button" onClick={handleSubmit} disabled={saving} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60">{saving ? 'Salvando...' : (isEditing ? 'Salvar Evento' : 'Criar Evento')}</button>
                   )}
                 </div>
               </div>
@@ -594,7 +602,7 @@ export function EventFormModal({
 
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-card border border-white/[0.08] text-[#94A3B8] text-sm hover:bg-white/[0.04] transition-colors">← Voltar</button>
-                  <button type="button" onClick={handleSubmitCreate} disabled={saving} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60">{saving ? 'Criando...' : 'Criar Evento'}</button>
+                  <button type="button" onClick={handleSubmit} disabled={saving} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60">{saving ? 'Salvando...' : (isEditing ? 'Salvar Evento' : 'Criar Evento')}</button>
                 </div>
               </div>
             )}

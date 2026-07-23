@@ -37,6 +37,7 @@ interface StemFadersProps {
 
 export function StemFaders({ stems }: StemFadersProps) {
   const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({})
+  const syncFrameRef = useRef<number | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [volumes, setVolumes] = useState<Record<string, number>>({})
@@ -63,8 +64,34 @@ export function StemFaders({ stems }: StemFadersProps) {
     }
   }, [hasSolo, muted, playbackRate, soloed, stems, volumes])
 
+  useEffect(() => () => {
+    if (syncFrameRef.current !== null) cancelAnimationFrame(syncFrameRef.current)
+    Object.values(audioRefs.current).forEach((audio) => audio?.pause())
+  }, [])
+
+  function stopSyncLoop() {
+    if (syncFrameRef.current !== null) cancelAnimationFrame(syncFrameRef.current)
+    syncFrameRef.current = null
+  }
+
+  function startSyncLoop(audios: HTMLAudioElement[]) {
+    stopSyncLoop()
+    const sync = () => {
+      const master = audios[0]
+      if (!master || master.paused) return
+      for (const audio of audios.slice(1)) {
+        const drift = audio.currentTime - master.currentTime
+        if (Math.abs(drift) > 0.08) audio.currentTime = master.currentTime
+        else audio.playbackRate = Math.max(0.5, Math.min(2, playbackRate - drift * 0.2))
+      }
+      syncFrameRef.current = requestAnimationFrame(sync)
+    }
+    syncFrameRef.current = requestAnimationFrame(sync)
+  }
+
   async function togglePlayback() {
     if (isPlaying) {
+      stopSyncLoop()
       Object.values(audioRefs.current).forEach((audio) => audio?.pause())
       setIsPlaying(false)
       return
@@ -75,21 +102,32 @@ export function StemFaders({ stems }: StemFadersProps) {
       .filter((audio): audio is HTMLAudioElement => Boolean(audio))
     if (audios.length === 0) return
 
-    const currentTime = Math.min(...audios.map((audio) => audio.currentTime || 0))
+    const currentTime = audios[0]?.currentTime ?? 0
 
     try {
+      await Promise.all(audios.map((audio) => audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA
+        ? Promise.resolve()
+        : new Promise<void>((resolve, reject) => {
+            audio.addEventListener('canplay', () => resolve(), { once: true })
+            audio.addEventListener('error', () => reject(new Error('Falha ao carregar uma faixa.')), { once: true })
+            audio.load()
+          })))
       await Promise.all(audios.map(async (audio) => {
         audio.currentTime = currentTime
         audio.playbackRate = playbackRate
         await audio.play()
       }))
       setIsPlaying(true)
+      startSyncLoop(audios)
     } catch {
+      stopSyncLoop()
+      audios.forEach((audio) => audio.pause())
       setIsPlaying(false)
     }
   }
 
   function stopAll() {
+    stopSyncLoop()
     Object.values(audioRefs.current).forEach((audio) => {
       if (!audio) return
       audio.pause()
@@ -255,8 +293,14 @@ export function StemFaders({ stems }: StemFadersProps) {
               <audio
                 ref={(element) => { audioRefs.current[stem.id] = element }}
                 src={stem.audio_url}
-                preload="metadata"
-                onEnded={() => setIsPlaying(false)}
+                preload="auto"
+                onEnded={() => {
+                  const active = Object.values(audioRefs.current).filter(Boolean) as HTMLAudioElement[]
+                  if (active.every((audio) => audio.ended)) {
+                    stopSyncLoop()
+                    setIsPlaying(false)
+                  }
+                }}
               />
             </div>
           )

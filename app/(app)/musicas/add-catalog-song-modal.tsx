@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FolderUp, Plus, X } from 'lucide-react'
+import { Check, FolderUp, Loader2, Plus, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { buildStemStoragePath, detectStemType, isAudioFileName } from '@/lib/stem-utils'
 import { addCatalogSong } from './catalog-actions'
+import type { Json } from '@/types/database'
 
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
   'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm']
@@ -36,6 +37,24 @@ const emptyForm = {
   soloist_id: '',
   version: '',
   youtube_url: '',
+  youtube_video_id: '',
+  youtube_thumbnail: '',
+  youtube_duration: '',
+  bpm: '',
+  lyrics_plain: '',
+  lyrics_synced: '',
+  album_name: '',
+  metadata_source: '',
+  metadata_payload: {} as Json,
+}
+
+interface YouTubeResult {
+  videoId: string
+  title: string
+  artist: string
+  thumbnail: string | null
+  duration: string | null
+  url: string
 }
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
@@ -52,6 +71,69 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [multitrackFiles, setMultitrackFiles] = useState<File[]>([])
+  const [youtubeResults, setYoutubeResults] = useState<YouTubeResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [enriching, setEnriching] = useState(false)
+
+  useEffect(() => {
+    const query = form.title.trim()
+    if (query.length < 3 || form.youtube_video_id) {
+      setYoutubeResults([])
+      return
+    }
+    const controller = new AbortController()
+    const timeout = window.setTimeout(async () => {
+      setSearching(true)
+      try {
+        const response = await fetch(`/api/youtube/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        const data = await response.json()
+        if (response.ok) setYoutubeResults(data.results ?? [])
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('Erro ao buscar no YouTube.')
+      } finally {
+        if (!controller.signal.aborted) setSearching(false)
+      }
+    }, 450)
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [form.title, form.youtube_video_id])
+
+  async function confirmYoutubeResult(result: YouTubeResult) {
+    setEnriching(true)
+    try {
+      const response = await fetch('/api/music/enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(result),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Não foi possível enriquecer a música.')
+      setForm((current) => ({
+        ...current,
+        title: data.title || result.title,
+        artist: data.artist || result.artist,
+        youtube_url: data.youtubeUrl || result.url,
+        youtube_video_id: data.youtubeVideoId || result.videoId,
+        youtube_thumbnail: data.youtubeThumbnail || result.thumbnail || '',
+        youtube_duration: data.youtubeDuration || result.duration || '',
+        key_note: data.keyNote || current.key_note,
+        bpm: data.bpm ? String(data.bpm) : current.bpm,
+        album_name: data.albumName || '',
+        lyrics_plain: data.lyricsPlain || '',
+        lyrics_synced: data.lyricsSynced || '',
+        metadata_source: data.metadataSource || 'youtube',
+        metadata_payload: data.metadataPayload || {},
+      }))
+      setYoutubeResults([])
+      toast.success('Música confirmada e informações preenchidas.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao confirmar música.')
+    } finally {
+      setEnriching(false)
+    }
+  }
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -121,6 +203,15 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
         soloistId: form.soloist_id || null,
         version: form.version || null,
         youtubeUrl: form.youtube_url || null,
+        youtubeVideoId: form.youtube_video_id || null,
+        youtubeThumbnail: form.youtube_thumbnail || null,
+        youtubeDuration: form.youtube_duration || null,
+        bpm: form.bpm ? Number(form.bpm) : null,
+        lyricsPlain: form.lyrics_plain || null,
+        lyricsSynced: form.lyrics_synced || null,
+        albumName: form.album_name || null,
+        metadataSource: form.metadata_source || null,
+        metadataPayload: form.metadata_payload,
       })
 
       await uploadMultitracks(result.songId)
@@ -164,6 +255,18 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
                 placeholder="Nome da música"
                 className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
               />
+              {searching && <p className="mt-2 flex items-center gap-2 text-xs text-[#94A3B8]"><Loader2 className="h-3.5 w-3.5 animate-spin" />Buscando opções no YouTube...</p>}
+              {youtubeResults.length > 0 && (
+                <div className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-card border border-white/[0.08] bg-navy-800 p-2">
+                  {youtubeResults.map((result) => (
+                    <div key={result.videoId} className="flex items-center gap-3 rounded-card bg-navy-900 p-2">
+                      {result.thumbnail && <img src={result.thumbnail} alt="" className="h-12 w-20 rounded object-cover" />}
+                      <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-white">{result.title}</p><p className="truncate text-[11px] text-[#64748B]">{result.artist}</p></div>
+                      <button type="button" disabled={enriching} onClick={() => confirmYoutubeResult(result)} className="inline-flex items-center gap-1 rounded-card bg-brand px-2 py-1.5 text-xs text-white disabled:opacity-50"><Check className="h-3.5 w-3.5" />Confirmar</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
@@ -177,6 +280,22 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
                 className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
               />
             </div>
+
+            <div>
+              <label htmlFor="cat-bpm" className="block text-xs text-[#94A3B8] mb-1">BPM</label>
+              <input id="cat-bpm" name="bpm" type="number" min="20" max="300" value={form.bpm} onChange={handleChange} className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand" />
+            </div>
+
+            {form.youtube_video_id && (
+              <details className="col-span-2 rounded-card border border-white/[0.08] bg-navy-800/60 p-3">
+                <summary className="cursor-pointer text-sm font-medium text-white">Informações da música</summary>
+                <div className="mt-3 space-y-3">
+                  <input name="album_name" value={form.album_name} onChange={handleChange} placeholder="Álbum" className="w-full px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm" />
+                  <textarea name="lyrics_plain" value={form.lyrics_plain} onChange={(event) => setForm((current) => ({ ...current, lyrics_plain: event.target.value }))} rows={8} placeholder="Letra" className="w-full px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm resize-y" />
+                  <p className="text-[11px] text-[#64748B]">Fonte: {form.metadata_source || 'YouTube'}</p>
+                </div>
+              </details>
+            )}
 
             <div>
               <label htmlFor="cat-version" className="block text-xs text-[#94A3B8] mb-1">Versão</label>
