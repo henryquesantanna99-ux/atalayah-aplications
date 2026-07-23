@@ -219,6 +219,13 @@ export interface Database {
           youtube_duration: string | null
           cifra_club_url: string | null
           default_key: string | null
+          bpm: number | null
+          lyrics_plain: string | null
+          lyrics_synced: string | null
+          album_name: string | null
+          metadata_source: string | null
+          metadata_payload: Json
+          metadata_fetched_at: string | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -233,6 +240,13 @@ export interface Database {
           youtube_duration?: string | null
           cifra_club_url?: string | null
           default_key?: string | null
+          bpm?: number | null
+          lyrics_plain?: string | null
+          lyrics_synced?: string | null
+          album_name?: string | null
+          metadata_source?: string | null
+          metadata_payload?: Json
+          metadata_fetched_at?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -246,6 +260,13 @@ export interface Database {
           youtube_duration?: string | null
           cifra_club_url?: string | null
           default_key?: string | null
+          bpm?: number | null
+          lyrics_plain?: string | null
+          lyrics_synced?: string | null
+          album_name?: string | null
+          metadata_source?: string | null
+          metadata_payload?: Json
+          metadata_fetched_at?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -613,7 +634,7 @@ export type LaiaMessageInsert = Database['public']['Tables']['laia_messages']['I
 export type LaiaUsage = Database['public']['Tables']['laia_usage']['Row']
 
 export interface SongVariationWithDetails extends SongVariation {
-  songs: Pick<Song, 'id' | 'title' | 'artist' | 'youtube_url'>
+  songs: Pick<Song, 'id' | 'title' | 'artist' | 'youtube_video_id' | 'youtube_url' | 'youtube_thumbnail' | 'youtube_duration' | 'bpm' | 'default_key' | 'album_name' | 'lyrics_plain' | 'lyrics_synced' | 'metadata_source' | 'metadata_payload'>
   profiles: Pick<Profile, 'id' | 'full_name'> | null
   song_stems?: Pick<SongStem, 'id' | 'stem_type' | 'original_file_name'>[]
   is_virtual?: boolean

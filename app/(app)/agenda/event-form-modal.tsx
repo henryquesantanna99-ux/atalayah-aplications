@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CalendarPlus, Music2, Pencil, Plus, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { CalendarPlus, Check, Music2, Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { updateEvent, createScale } from './actions'
+import { createScale } from './actions'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
@@ -160,6 +160,7 @@ export function EventFormModal({
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
+  const [loadingExisting, setLoadingExisting] = useState(false)
   const [catalogSongs, setCatalogSongs] = useState<CatalogSong[]>([])
   const [catalogLoaded, setCatalogLoaded] = useState(false)
   const [songSearchByDraft, setSongSearchByDraft] = useState<Record<string, string>>({})
@@ -225,35 +226,66 @@ export function EventFormModal({
     })
   }
 
-  function selectCatalogSong(draft: EventSongDraft, variation: CatalogSong) {
-    setSongs((prev) => prev.map((s) =>
-      s.id === draft.id
-        ? {
-            ...s,
-            catalogVariationId: variation.id,
-            songId: variation.song_id,
-            title: variation.title,
-            artist: variation.artist ?? '',
-            keyNote: variation.key_note ?? '',
-            moment: variation.moment ?? '',
-            soloistId: variation.soloist_id ?? '',
-            version: variation.version ?? '',
-            youtubeUrl: variation.youtube_url ?? '',
-          }
-        : s
-    ))
-    setSongSearchByDraft((current) => {
-      const next = { ...current }
-      delete next[draft.id]
-      return next
-    })
+  function addCatalogSongToEvent(variation: CatalogSong) {
+    setSongs((current) => [
+      ...current.filter((song) => song.title.trim()),
+      {
+        ...newSongDraft(),
+        catalogVariationId: variation.id,
+        songId: variation.song_id,
+        title: variation.title,
+        artist: variation.artist ?? '',
+        keyNote: variation.key_note ?? '',
+        moment: variation.moment ?? '',
+        soloistId: variation.soloist_id ?? '',
+        version: variation.version ?? '',
+        youtubeUrl: variation.youtube_url ?? '',
+      },
+    ])
   }
 
   function updateSongField(id: string, field: keyof EventSongDraft, value: string) {
     setSongs((prev) => prev.map((s) => s.id === id ? { ...s, [field]: value } : s))
   }
 
-  function handleOpenChange(val: boolean) {
+  async function loadExistingEvent() {
+    if (!event) return
+    setLoadingExisting(true)
+    try {
+      const [{ data: memberRows, error: memberError }, { data: songRows, error: songError }] = await Promise.all([
+        supabase.from('event_members').select('profile_id, instrument').eq('event_id', event.id),
+        supabase
+          .from('setlist_songs')
+          .select('id, song_id, song_title, artist, key_note, moment, soloist_id, version, reference_link, order_index')
+          .eq('event_id', event.id)
+          .order('order_index'),
+      ])
+      if (memberError) throw memberError
+      if (songError) throw songError
+      setSelectedMembers(Object.fromEntries((memberRows ?? []).map((row) => [row.profile_id, row.instrument ?? ''])))
+      setSongs((songRows ?? []).length > 0
+        ? (songRows ?? []).map((row) => ({
+            id: row.id,
+            catalogVariationId: null,
+            songId: row.song_id,
+            title: row.song_title,
+            artist: row.artist ?? '',
+            keyNote: row.key_note ?? '',
+            moment: row.moment ?? '',
+            soloistId: row.soloist_id ?? '',
+            version: row.version ?? '',
+            youtubeUrl: row.reference_link ?? '',
+          }))
+        : [newSongDraft()])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao carregar a escala do evento.')
+    } finally {
+      setLoadingExisting(false)
+    }
+  }
+
+  async function handleOpenChange(val: boolean) {
+    if (val && event) await loadExistingEvent()
     setOpen(val)
     if (!val) {
       setStep(1)
@@ -275,28 +307,7 @@ export function EventFormModal({
     setStep((s) => s + 1)
   }
 
-  async function handleSubmitEdit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!event) return
-    if (!form.title.trim()) {
-      toast.error('Informe o título do evento.')
-      return
-    }
-    setSaving(true)
-    const payload = buildPayload()
-    try {
-      await updateEvent(event.id, payload)
-      toast.success('Evento atualizado.')
-      setOpen(false)
-      router.refresh()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao salvar evento.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleSubmitCreate() {
+  async function handleSubmit() {
     if (!form.title.trim()) {
       toast.error('Informe o título do evento.')
       return
@@ -311,10 +322,11 @@ export function EventFormModal({
     setSaving(true)
     try {
       await createScale({
-        eventId: null,
+        eventId: event?.id ?? null,
         event: buildPayload(),
         members,
         songs: validSongs.map((s) => ({
+          setlistSongId: s.id,
           songId: s.songId ?? null,
           songTitle: s.title,
           artist: s.artist || null,
@@ -325,7 +337,7 @@ export function EventFormModal({
           referenceLink: s.youtubeUrl || null,
         })),
       })
-      toast.success('Evento criado com sucesso.')
+      toast.success(isEditing ? 'Evento atualizado com sucesso.' : 'Evento criado com sucesso.')
       handleOpenChange(false)
       router.refresh()
     } catch (err) {
@@ -386,8 +398,7 @@ export function EventFormModal({
           </DialogTitle>
         </DialogHeader>
 
-        {!isEditing && (
-          <div className="flex items-center gap-2 mt-1 mb-2">
+        <div className="flex items-center gap-2 mt-1 mb-2">
             {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium transition-colors ${
@@ -401,20 +412,11 @@ export function EventFormModal({
                 {s < totalSteps && <div className="w-8 h-px bg-white/[0.08]" />}
               </div>
             ))}
-          </div>
-        )}
+        </div>
 
-        {isEditing && (
-          <form onSubmit={handleSubmitEdit} className="space-y-4 mt-2">
-            <Step1Fields form={form} profiles={profiles} onChange={handleChange} inputClass={inputClass} />
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setOpen(false)} className="flex-1 py-2.5 rounded-card border border-white/[0.08] text-[#94A3B8] text-sm hover:bg-white/[0.04] transition-colors">Cancelar</button>
-              <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60">{saving ? 'Salvando...' : 'Salvar'}</button>
-            </div>
-          </form>
-        )}
-
-        {!isEditing && (
+        {loadingExisting ? (
+          <p className="py-8 text-center text-sm text-[#94A3B8]">Carregando evento...</p>
+        ) : (
           <div className="space-y-5 mt-2">
             {step === 1 && (
               <div className="space-y-4">
@@ -434,7 +436,11 @@ export function EventFormModal({
                 ) : (
                   <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                     {profiles.map((profile) => {
-                      const functions = availableFunctions(profile)
+                      const currentFunction = selectedMembers[profile.id]
+                      const functions = Array.from(new Set([
+                        ...availableFunctions(profile),
+                        ...(currentFunction ? [currentFunction] : []),
+                      ]))
                       const checked = profile.id in selectedMembers
                       return (
                         <div key={profile.id} className="grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-2 rounded-card border border-white/[0.06] bg-navy-800/50 p-3">
@@ -461,7 +467,7 @@ export function EventFormModal({
                   {form.type === 'culto' ? (
                     <button type="button" onClick={handleNext} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors">Próximo →</button>
                   ) : (
-                    <button type="button" onClick={handleSubmitCreate} disabled={saving} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60">{saving ? 'Criando...' : 'Criar Evento'}</button>
+                    <button type="button" onClick={handleSubmit} disabled={saving} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60">{saving ? 'Salvando...' : (isEditing ? 'Salvar Evento' : 'Criar Evento')}</button>
                   )}
                 </div>
               </div>
@@ -469,132 +475,83 @@ export function EventFormModal({
 
             {step === 3 && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between gap-2">
+                <div>
                   <h3 className="text-sm font-semibold text-white">Músicas do Culto</h3>
-                  <button
-                    type="button"
-                    onClick={() => setSongs((prev) => [...prev, newSongDraft()])}
-                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-card border border-white/[0.08] text-[#94A3B8] hover:text-white hover:border-white/20 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Música
-                  </button>
+                  <p className="mt-1 text-xs text-[#64748B]">Adicione músicas do catálogo à esquerda e ajuste a escala à direita.</p>
                 </div>
 
-                <div className="space-y-3">
-                  {songs.map((draft, index) => (
-                    <div key={draft.id} className="rounded-card border border-white/[0.06] bg-navy-800/50 p-3 space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-[#64748B]">Música {index + 1}</span>
-                        <button
-                          type="button"
-                          onClick={() => setSongs((prev) => prev.filter((s) => s.id !== draft.id))}
-                          className="p-1 rounded text-[#64748B] hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                          aria-label="Remover música"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="relative">
-                        <input
-                          value={draft.catalogVariationId ? `${draft.title}${draft.artist ? ` — ${draft.artist}` : ''}` : songSearchByDraft[draft.id] ?? ''}
-                          onChange={(e) => {
-                            if (draft.catalogVariationId) {
-                              setSongs((prev) => prev.map((s) => s.id === draft.id ? { ...newSongDraft(), id: s.id } : s))
-                            }
-                            setSongSearchByDraft((current) => ({ ...current, [draft.id]: e.target.value }))
-                          }}
-                          onFocus={() => { if (!catalogLoaded) loadCatalog() }}
-                          placeholder="Buscar no catálogo ou digitar nova música..."
-                          className={inputSmClass}
-                        />
-                        {!draft.catalogVariationId && (filteredCatalogForDraft(draft.id).length > 0 || songSearchByDraft[draft.id]) && (
-                          <div className="absolute z-10 mt-1 w-full rounded-card border border-white/[0.08] bg-navy-900 shadow-xl overflow-hidden">
-                            {filteredCatalogForDraft(draft.id).map((cat) => (
-                              <button
-                                key={cat.id}
-                                type="button"
-                                onClick={() => selectCatalogSong(draft, cat)}
-                                className="w-full text-left px-3 py-2 text-xs hover:bg-white/[0.05] transition-colors"
-                              >
-                                <span className="flex items-center gap-2">
-                                  <Music2 className="h-3.5 w-3.5 text-cyan-300" />
-                                  <span className="text-white font-medium">{cat.title}</span>
-                                  {cat.artist && <span className="text-[#64748B]">{cat.artist}</span>}
-                                  {cat.key_note && <span className="text-[#94A3B8] font-mono">{cat.key_note}</span>}
-                                </span>
-                                {cat.stems.length > 0 && (
-                                  <span className="mt-1 flex flex-wrap gap-1 pl-5">
-                                    {cat.stems.slice(0, 5).map((stem) => (
-                                      <span key={stem.id} className="rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-300">
-                                        {stemDisplayName(stem)}
-                                      </span>
-                                    ))}
-                                    {cat.stems.length > 5 && <span className="text-[10px] text-[#64748B]">+{cat.stems.length - 5}</span>}
-                                  </span>
-                                )}
-                              </button>
-                            ))}
-                            {songSearchByDraft[draft.id] && filteredCatalogForDraft(draft.id).length === 0 && (
-                              <div className="px-3 py-2 text-xs text-[#64748B]">Nenhuma música encontrada. Preencha os campos abaixo para criar.</div>
-                            )}
+                <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(260px,0.85fr)_minmax(360px,1.15fr)]">
+                  <section className="flex min-h-0 flex-col rounded-card border border-white/[0.06] bg-navy-800/40 p-3">
+                    <label className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[#64748B]">Catálogo</label>
+                    <input
+                      value={songSearchByDraft.catalog ?? ''}
+                      onChange={(event) => setSongSearchByDraft((current) => ({ ...current, catalog: event.target.value }))}
+                      placeholder="Buscar música ou artista..."
+                      className={inputSmClass}
+                    />
+                    <div className="mt-3 max-h-[430px] space-y-2 overflow-y-auto pr-1">
+                      {filteredCatalogForDraft('catalog').map((catalogSong) => (
+                        (() => {
+                          const alreadyAdded = songs.some((song) => song.catalogVariationId === catalogSong.id)
+                          return (
+                        <div key={catalogSong.id} className="flex items-center gap-2 rounded-card border border-white/[0.06] bg-navy-900 p-2.5">
+                          <Music2 className="h-4 w-4 shrink-0 text-cyan-300" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-white">{catalogSong.title}</p>
+                            <p className="truncate text-[11px] text-[#64748B]">{catalogSong.artist || 'Artista não informado'}{catalogSong.key_note ? ` · ${catalogSong.key_note}` : ''}</p>
                           </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="col-span-2">
-                          <label className="block text-[10px] text-[#64748B] mb-1">Título</label>
-                          <input value={draft.title} onChange={(e) => updateSongField(draft.id, 'title', e.target.value)} placeholder="Nome da música" className={inputSmClass} />
+                          <button
+                            type="button"
+                            onClick={() => addCatalogSongToEvent(catalogSong)}
+                            disabled={alreadyAdded}
+                            className="inline-flex shrink-0 items-center gap-1 rounded-card bg-brand/15 px-2 py-1.5 text-[11px] font-medium text-brand hover:bg-brand/25 disabled:cursor-default disabled:opacity-40"
+                            aria-label={`Adicionar ${catalogSong.title}`}
+                          >
+                            {alreadyAdded ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {alreadyAdded ? 'Adicionada' : 'Adicionar'}
+                          </button>
                         </div>
-                        <div>
-                          <label className="block text-[10px] text-[#64748B] mb-1">Artista</label>
-                          <input value={draft.artist} onChange={(e) => updateSongField(draft.id, 'artist', e.target.value)} placeholder="Artista" className={inputSmClass} />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-[#64748B] mb-1">Tom</label>
-                          <select value={draft.keyNote} onChange={(e) => updateSongField(draft.id, 'keyNote', e.target.value)} className={inputSmClass}>
-                            <option value="">—</option>
-                            {KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-[#64748B] mb-1">Momento</label>
-                          <select value={draft.moment} onChange={(e) => updateSongField(draft.id, 'moment', e.target.value)} className={inputSmClass}>
-                            <option value="">—</option>
-                            {MOMENTS.map((m) => <option key={m} value={m}>{m}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-[#64748B] mb-1">Solista</label>
-                          <select value={draft.soloistId} onChange={(e) => updateSongField(draft.id, 'soloistId', e.target.value)} className={inputSmClass}>
-                            <option value="">—</option>
-                            {profiles.map((p) => (
-                              <option key={p.id} value={p.id}>{p.full_name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-[#64748B] mb-1">Versão</label>
-                          <input value={draft.version} onChange={(e) => updateSongField(draft.id, 'version', e.target.value)} placeholder="ao vivo, original..." className={inputSmClass} />
-                        </div>
-                        <div className="col-span-2">
-                          <label className="block text-[10px] text-[#64748B] mb-1">Link de Referência do YouTube</label>
-                          <input value={draft.youtubeUrl} onChange={(e) => updateSongField(draft.id, 'youtubeUrl', e.target.value)} type="url" placeholder="https://youtube.com/..." className={inputSmClass} />
-                        </div>
-                      </div>
-
-                      {draft.songId && (
-                        <SelectedSongStems stems={catalogSongs.find((song) => song.song_id === draft.songId)?.stems ?? []} />
-                      )}
+                          )
+                        })()
+                      ))}
+                      {filteredCatalogForDraft('catalog').length === 0 && <p className="py-8 text-center text-xs text-[#64748B]">Nenhuma música encontrada.</p>}
                     </div>
-                  ))}
+                  </section>
+
+                  <section className="flex min-h-0 flex-col rounded-card border border-white/[0.06] bg-navy-800/40 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-medium text-white">Selecionadas</p>
+                        <p className="text-[11px] text-[#64748B]">{songs.filter((song) => song.title.trim()).length} música(s)</p>
+                      </div>
+                      <button type="button" onClick={() => setSongs((current) => [...current.filter((song) => song.title.trim()), newSongDraft()])} className="inline-flex items-center gap-1 rounded-card border border-white/[0.08] px-2.5 py-1.5 text-[11px] text-[#94A3B8] hover:text-white">
+                        <Plus className="h-3.5 w-3.5" /> Música manual
+                      </button>
+                    </div>
+                    <div className="max-h-[430px] space-y-3 overflow-y-auto pr-1">
+                      {songs.map((draft, index) => (
+                        <div key={draft.id} className="space-y-3 rounded-card border border-white/[0.06] bg-navy-900 p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-[#94A3B8]">{index + 1}. {draft.title || 'Nova música'}</span>
+                            <button type="button" onClick={() => setSongs((current) => current.filter((song) => song.id !== draft.id))} className="rounded p-1 text-[#64748B] hover:bg-red-400/10 hover:text-red-400" aria-label="Remover música"><Trash2 className="h-3.5 w-3.5" /></button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input value={draft.title} onChange={(event) => updateSongField(draft.id, 'title', event.target.value)} placeholder="Título" className={`col-span-2 ${inputSmClass}`} />
+                            <input value={draft.artist} onChange={(event) => updateSongField(draft.id, 'artist', event.target.value)} placeholder="Artista" className={inputSmClass} />
+                            <select value={draft.keyNote} onChange={(event) => updateSongField(draft.id, 'keyNote', event.target.value)} className={inputSmClass}><option value="">Tom</option>{KEYS.map((key) => <option key={key} value={key}>{key}</option>)}</select>
+                            <select value={draft.moment} onChange={(event) => updateSongField(draft.id, 'moment', event.target.value)} className={inputSmClass}><option value="">Momento</option>{MOMENTS.map((moment) => <option key={moment} value={moment}>{moment}</option>)}</select>
+                            <select value={draft.soloistId} onChange={(event) => updateSongField(draft.id, 'soloistId', event.target.value)} className={inputSmClass}><option value="">Solista</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name}</option>)}</select>
+                            <input value={draft.version} onChange={(event) => updateSongField(draft.id, 'version', event.target.value)} placeholder="Versão" className={inputSmClass} />
+                            <input value={draft.youtubeUrl} onChange={(event) => updateSongField(draft.id, 'youtubeUrl', event.target.value)} type="url" placeholder="Link do YouTube" className={inputSmClass} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 </div>
 
                 <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setStep(2)} className="flex-1 py-2.5 rounded-card border border-white/[0.08] text-[#94A3B8] text-sm hover:bg-white/[0.04] transition-colors">← Voltar</button>
-                  <button type="button" onClick={handleSubmitCreate} disabled={saving} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60">{saving ? 'Criando...' : 'Criar Evento'}</button>
+                  <button type="button" onClick={() => setStep(2)} className="flex-1 rounded-card border border-white/[0.08] py-2.5 text-sm text-[#94A3B8] hover:bg-white/[0.04]">← Voltar</button>
+                  <button type="button" onClick={handleSubmit} disabled={saving} className="flex-1 rounded-card bg-brand py-2.5 text-sm font-medium text-white hover:bg-brand-light disabled:opacity-60">{saving ? 'Salvando...' : (isEditing ? 'Salvar Evento' : 'Criar Evento')}</button>
                 </div>
               </div>
             )}
@@ -720,30 +677,4 @@ function buildCatalogSongs(variationsData: unknown[], songsData: unknown[]): Cat
 
 function stemDisplayName(stem: CatalogStem) {
   return stem.original_file_name?.split('/').pop()?.replace(/\.[^.]+$/, '') ?? stem.stem_type
-}
-
-function SelectedSongStems({ stems }: { stems: CatalogStem[] }) {
-  if (stems.length === 0) {
-    return (
-      <p className="rounded-card border border-white/[0.06] bg-navy-900 px-3 py-2 text-xs text-[#64748B]">
-        Esta música ainda não tem multitracks cadastradas.
-      </p>
-    )
-  }
-
-  return (
-    <div className="rounded-card border border-emerald-400/20 bg-emerald-400/10 p-3">
-      <p className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-300">
-        <SlidersHorizontal className="h-3.5 w-3.5" />
-        {stems.length} faixa(s) virão junto com esta música
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        {stems.map((stem) => (
-          <span key={stem.id} className="rounded-full bg-navy-900/70 px-2 py-1 text-[11px] text-emerald-100">
-            {stemDisplayName(stem)}
-          </span>
-        ))}
-      </div>
-    </div>
-  )
 }

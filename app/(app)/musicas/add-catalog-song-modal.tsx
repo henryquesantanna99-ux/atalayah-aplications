@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FolderUp, Plus, X } from 'lucide-react'
+import Image from 'next/image'
+import { Check, FolderUp, Loader2, Pencil, Plus, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,8 @@ import {
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { buildStemStoragePath, detectStemType, isAudioFileName } from '@/lib/stem-utils'
-import { addCatalogSong } from './catalog-actions'
+import { addCatalogSong, editCatalogSong } from './catalog-actions'
+import type { Json } from '@/types/database'
 
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
   'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm']
@@ -26,6 +28,26 @@ interface Profile {
 
 interface AddCatalogSongModalProps {
   profiles: Profile[]
+  song?: {
+    songId: string
+    variationId: string | null
+    title: string
+    artist: string | null
+    keyNote: string | null
+    moment: string | null
+    soloistId: string | null
+    version: string | null
+    youtubeUrl: string | null
+    youtubeVideoId: string | null
+    youtubeThumbnail: string | null
+    youtubeDuration: string | null
+    bpm: number | null
+    lyricsPlain: string | null
+    lyricsSynced: string | null
+    albumName: string | null
+    metadataSource: string | null
+    metadataPayload: Json
+  }
 }
 
 const emptyForm = {
@@ -36,6 +58,24 @@ const emptyForm = {
   soloist_id: '',
   version: '',
   youtube_url: '',
+  youtube_video_id: '',
+  youtube_thumbnail: '',
+  youtube_duration: '',
+  bpm: '',
+  lyrics_plain: '',
+  lyrics_synced: '',
+  album_name: '',
+  metadata_source: '',
+  metadata_payload: {} as Json,
+}
+
+interface YouTubeResult {
+  videoId: string
+  title: string
+  artist: string
+  thumbnail: string | null
+  duration: string | null
+  url: string
 }
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
@@ -45,13 +85,85 @@ function getRelativeFilePath(file: File) {
   return relativePath && relativePath.length > 0 ? relativePath : file.name
 }
 
-export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
+export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps) {
   const router = useRouter()
   const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState(emptyForm)
+  const isEditing = Boolean(song)
+  const initialForm = song ? {
+    title: song.title, artist: song.artist ?? '', key_note: song.keyNote ?? '', moment: song.moment ?? '',
+    soloist_id: song.soloistId ?? '', version: song.version ?? '', youtube_url: song.youtubeUrl ?? '',
+    youtube_video_id: song.youtubeVideoId ?? '', youtube_thumbnail: song.youtubeThumbnail ?? '',
+    youtube_duration: song.youtubeDuration ?? '', bpm: song.bpm ? String(song.bpm) : '',
+    lyrics_plain: song.lyricsPlain ?? '', lyrics_synced: song.lyricsSynced ?? '', album_name: song.albumName ?? '',
+    metadata_source: song.metadataSource ?? '', metadata_payload: song.metadataPayload ?? {},
+  } : emptyForm
+  const [form, setForm] = useState(initialForm)
   const [multitrackFiles, setMultitrackFiles] = useState<File[]>([])
+  const [youtubeResults, setYoutubeResults] = useState<YouTubeResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [enriching, setEnriching] = useState(false)
+
+  useEffect(() => {
+    const query = form.title.trim()
+    if (query.length < 3 || form.youtube_video_id) {
+      setYoutubeResults([])
+      return
+    }
+    const controller = new AbortController()
+    const timeout = window.setTimeout(async () => {
+      setSearching(true)
+      try {
+        const response = await fetch(`/api/youtube/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        const data = await response.json()
+        if (response.ok) setYoutubeResults(data.results ?? [])
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) toast.error('Erro ao buscar no YouTube.')
+      } finally {
+        if (!controller.signal.aborted) setSearching(false)
+      }
+    }, 450)
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [form.title, form.youtube_video_id])
+
+  async function confirmYoutubeResult(result: YouTubeResult) {
+    setEnriching(true)
+    try {
+      const response = await fetch('/api/music/enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(result),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? 'Não foi possível enriquecer a música.')
+      setForm((current) => ({
+        ...current,
+        title: data.title || result.title,
+        artist: data.artist || result.artist,
+        youtube_url: data.youtubeUrl || result.url,
+        youtube_video_id: data.youtubeVideoId || result.videoId,
+        youtube_thumbnail: data.youtubeThumbnail || result.thumbnail || '',
+        youtube_duration: data.youtubeDuration || result.duration || '',
+        key_note: data.keyNote || current.key_note,
+        bpm: data.bpm ? String(data.bpm) : current.bpm,
+        album_name: data.albumName || '',
+        lyrics_plain: data.lyricsPlain || '',
+        lyrics_synced: data.lyricsSynced || '',
+        metadata_source: data.metadataSource || 'youtube',
+        metadata_payload: data.metadataPayload || {},
+      }))
+      setYoutubeResults([])
+      toast.success('Música confirmada e informações preenchidas.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao confirmar música.')
+    } finally {
+      setEnriching(false)
+    }
+  }
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -113,7 +225,7 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
 
     setSaving(true)
     try {
-      const result = await addCatalogSong({
+      const payload = {
         title: form.title.trim(),
         artist: form.artist || null,
         keyNote: form.key_note || null,
@@ -121,13 +233,25 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
         soloistId: form.soloist_id || null,
         version: form.version || null,
         youtubeUrl: form.youtube_url || null,
-      })
+        youtubeVideoId: form.youtube_video_id || null,
+        youtubeThumbnail: form.youtube_thumbnail || null,
+        youtubeDuration: form.youtube_duration || null,
+        bpm: form.bpm ? Number(form.bpm) : null,
+        lyricsPlain: form.lyrics_plain || null,
+        lyricsSynced: form.lyrics_synced || null,
+        albumName: form.album_name || null,
+        metadataSource: form.metadata_source || null,
+        metadataPayload: form.metadata_payload,
+      }
+      const result = song
+        ? await editCatalogSong(song.songId, song.variationId, payload)
+        : await addCatalogSong(payload)
 
       await uploadMultitracks(result.songId)
 
-      toast.success('Música adicionada ao catálogo.')
+      toast.success(isEditing ? 'Música atualizada.' : 'Música adicionada ao catálogo.')
       setOpen(false)
-      setForm(emptyForm)
+      setForm(initialForm)
       setMultitrackFiles([])
       router.refresh()
     } catch (error) {
@@ -138,16 +262,16 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (value) setForm(initialForm) }}>
       <DialogTrigger asChild>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors">
-          <Plus className="w-4 h-4" aria-hidden="true" />
-          Adicionar Nova Música
+        <button aria-label={isEditing ? `Editar ${song?.title}` : 'Adicionar nova música'} className={isEditing ? 'rounded p-1.5 text-[#64748B] hover:bg-white/[0.06] hover:text-white' : 'flex items-center gap-2 px-4 py-2 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors'}>
+          {isEditing ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="w-4 h-4" aria-hidden="true" />}
+          {!isEditing && 'Adicionar Nova Música'}
         </button>
       </DialogTrigger>
       <DialogContent className="bg-navy-900 border border-white/[0.08] text-white max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-white">Adicionar ao Catálogo</DialogTitle>
+          <DialogTitle className="text-white">{isEditing ? 'Editar Música' : 'Adicionar ao Catálogo'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="grid grid-cols-2 gap-3">
@@ -164,6 +288,18 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
                 placeholder="Nome da música"
                 className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
               />
+              {searching && <p className="mt-2 flex items-center gap-2 text-xs text-[#94A3B8]"><Loader2 className="h-3.5 w-3.5 animate-spin" />Buscando opções no YouTube...</p>}
+              {youtubeResults.length > 0 && (
+                <div className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-card border border-white/[0.08] bg-navy-800 p-2">
+                  {youtubeResults.map((result) => (
+                    <div key={result.videoId} className="flex items-center gap-3 rounded-card bg-navy-900 p-2">
+                      {result.thumbnail && <Image src={result.thumbnail} alt="" width={80} height={48} className="h-12 w-20 rounded object-cover" />}
+                      <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium text-white">{result.title}</p><p className="truncate text-[11px] text-[#64748B]">{result.artist}</p></div>
+                      <button type="button" disabled={enriching} onClick={() => confirmYoutubeResult(result)} className="inline-flex items-center gap-1 rounded-card bg-brand px-2 py-1.5 text-xs text-white disabled:opacity-50"><Check className="h-3.5 w-3.5" />Confirmar</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>
@@ -177,6 +313,22 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
                 className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
               />
             </div>
+
+            <div>
+              <label htmlFor="cat-bpm" className="block text-xs text-[#94A3B8] mb-1">BPM</label>
+              <input id="cat-bpm" name="bpm" type="number" min="20" max="300" value={form.bpm} onChange={handleChange} className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand" />
+            </div>
+
+            {form.youtube_video_id && (
+              <details className="col-span-2 rounded-card border border-white/[0.08] bg-navy-800/60 p-3">
+                <summary className="cursor-pointer text-sm font-medium text-white">Informações da música</summary>
+                <div className="mt-3 space-y-3">
+                  <input name="album_name" value={form.album_name} onChange={handleChange} placeholder="Álbum" className="w-full px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm" />
+                  <textarea name="lyrics_plain" value={form.lyrics_plain} onChange={(event) => setForm((current) => ({ ...current, lyrics_plain: event.target.value }))} rows={8} placeholder="Letra" className="w-full px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm resize-y" />
+                  <p className="text-[11px] text-[#64748B]">Fonte: {form.metadata_source || 'YouTube'}</p>
+                </div>
+              </details>
+            )}
 
             <div>
               <label htmlFor="cat-version" className="block text-xs text-[#94A3B8] mb-1">Versão</label>
@@ -309,7 +461,7 @@ export function AddCatalogSongModal({ profiles }: AddCatalogSongModalProps) {
               disabled={saving}
               className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60"
             >
-              {saving ? 'Salvando...' : 'Adicionar'}
+              {saving ? 'Salvando...' : (isEditing ? 'Salvar alterações' : 'Adicionar')}
             </button>
           </div>
         </form>

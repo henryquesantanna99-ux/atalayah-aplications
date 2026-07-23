@@ -105,6 +105,7 @@ export async function createScale(input: {
     functionName: string
   }[]
   songs: {
+    setlistSongId: string
     songId?: string | null
     songTitle: string
     artist?: string | null
@@ -131,6 +132,20 @@ export async function createScale(input: {
 
     if (eventError) throw new Error(eventError.message)
     eventId = createdEvent.id
+  } else {
+    const { error: eventError } = await supabase.from('events').update(input.event).eq('id', eventId)
+    if (eventError) throw new Error(eventError.message)
+
+    const [{ error: membersDeleteError }, { error: songsDeleteError }] = await Promise.all([
+      input.members.length > 0
+        ? supabase.from('event_members').delete().eq('event_id', eventId).not('profile_id', 'in', `(${input.members.map((member) => member.profileId).join(',')})`)
+        : supabase.from('event_members').delete().eq('event_id', eventId),
+      input.songs.length > 0
+        ? supabase.from('setlist_songs').delete().eq('event_id', eventId).not('id', 'in', `(${input.songs.map((song) => song.setlistSongId).join(',')})`)
+        : supabase.from('setlist_songs').delete().eq('event_id', eventId),
+    ])
+    if (membersDeleteError) throw new Error(membersDeleteError.message)
+    if (songsDeleteError) throw new Error(songsDeleteError.message)
   }
 
   if (input.members.length > 0) {
@@ -152,8 +167,9 @@ export async function createScale(input: {
   if (input.event.type === 'culto' && validSongs.length > 0) {
     const { error: songsError } = await supabase
       .from('setlist_songs')
-      .insert(
+      .upsert(
         validSongs.map((song, index) => ({
+          id: song.setlistSongId,
           event_id: eventId,
           song_id: song.songId ?? null,
           order_index: index,
@@ -164,7 +180,8 @@ export async function createScale(input: {
           moment: (song.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null) ?? null,
           version: song.version ?? null,
           reference_link: song.referenceLink,
-        }))
+        })),
+        { onConflict: 'id' }
       )
 
     if (songsError) throw new Error(songsError.message)

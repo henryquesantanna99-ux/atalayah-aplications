@@ -167,6 +167,7 @@ export function ScaleFormModal({
         },
         members,
         songs: songs.map((song) => ({
+          setlistSongId: crypto.randomUUID(),
           songTitle: song.songTitle,
           soloistId: song.soloistId || null,
           keyNote: song.keyNote || null,
