@@ -10,10 +10,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { participatesInRotation, type ScheduleFunctionCategory } from '@/lib/schedule-functions'
 
 interface ScaleMember {
   id: string
   instrument: string | null
+  schedule_function_id: string | null
+  schedule_functions: {
+    display_name: string
+    category: ScheduleFunctionCategory
+  } | null
   profiles: {
     id: string
     full_name: string | null
@@ -75,7 +81,10 @@ export function ScalesModal({ scales }: ScalesModalProps) {
   }
 
   function reuseScale(scale: ScaleEvent) {
+    // Rotation compares band and vocal assignments. Sound and unknown legacy
+    // assignments are explicitly excluded instead of being guessed from text.
     const memberIds = scale.event_members
+      .filter((member) => participatesInRotation(member.schedule_functions?.category))
       .map((member) => member.profiles?.id)
       .filter(Boolean)
       .join(',')
@@ -165,7 +174,7 @@ export function ScalesModal({ scales }: ScalesModalProps) {
                       {scale.event_members.map((member) => (
                         <li key={member.id} className="text-sm text-[#94A3B8]">
                           <span className="text-white">{member.profiles?.full_name ?? 'Integrante'}</span>
-                          {member.instrument ? ` · ${member.instrument}` : ''}
+                          {' · '}{member.schedule_functions?.display_name ?? (member.instrument ? `Legado: ${member.instrument} (corrigir)` : 'Função pendente (corrigir)')}
                         </li>
                       ))}
                     </ul>

@@ -70,20 +70,37 @@ export async function deleteEvent(eventId: string) {
 export async function assignEventMember(input: {
   eventId: string
   profileId: string
-  instrument: string | null
+  scheduleFunctionId: string
 }) {
   const { supabase } = await requireEditor()
+  await requireActiveScheduleFunction(supabase, input.scheduleFunctionId)
   const { error } = await supabase.from('event_members').upsert(
     {
       event_id: input.eventId,
       profile_id: input.profileId,
-      instrument: input.instrument,
+      schedule_function_id: input.scheduleFunctionId,
+      instrument: null,
     },
     { onConflict: 'event_id,profile_id' }
   )
 
   if (error) throw new Error(error.message)
   revalidatePath('/agenda')
+}
+
+async function requireActiveScheduleFunction(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  scheduleFunctionId: string
+) {
+  const { data, error } = await supabase
+    .from('schedule_functions')
+    .select('id')
+    .eq('id', scheduleFunctionId)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Função da escala inválida ou inativa.')
 }
 
 export async function removeEventMember(eventMemberId: string) {
@@ -102,7 +119,7 @@ export async function createScale(input: {
   event: EventInput
   members: {
     profileId: string
-    functionName: string
+    scheduleFunctionId: string
   }[]
   songs: {
     setlistSongId: string
@@ -149,13 +166,25 @@ export async function createScale(input: {
   }
 
   if (input.members.length > 0) {
+    const functionIds = Array.from(new Set(input.members.map((member) => member.scheduleFunctionId)))
+    const { data: validFunctions, error: functionsError } = await supabase
+      .from('schedule_functions')
+      .select('id')
+      .in('id', functionIds)
+      .eq('is_active', true)
+    if (functionsError) throw new Error(functionsError.message)
+    if ((validFunctions ?? []).length !== functionIds.length) {
+      throw new Error('Uma ou mais funções da escala são inválidas ou inativas.')
+    }
+
     const { error: membersError } = await supabase
       .from('event_members')
       .upsert(
         input.members.map((member) => ({
           event_id: eventId,
           profile_id: member.profileId,
-          instrument: member.functionName,
+          schedule_function_id: member.scheduleFunctionId,
+          instrument: null,
         })),
         { onConflict: 'event_id,profile_id' }
       )

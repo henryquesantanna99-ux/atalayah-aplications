@@ -44,7 +44,7 @@ async function DashboardContent() {
     nextEvent
       ? supabase
           .from('event_members')
-          .select('*, profiles(id, full_name, avatar_url)')
+          .select('*, profiles(id, full_name, avatar_url), schedule_functions(display_name, category)')
           .eq('event_id', nextEvent.id)
           .order('created_at')
       : Promise.resolve({ data: [] }),

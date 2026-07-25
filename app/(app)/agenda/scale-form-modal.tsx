@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ListChecks, Plus, Trash2 } from 'lucide-react'
 import {
@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { createScale } from './actions'
+import { createClient } from '@/lib/supabase/client'
+import { isVocalFunction, type ScheduleFunctionOption } from '@/lib/schedule-functions'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
@@ -73,29 +75,20 @@ function newSong(): SongDraft {
   }
 }
 
-function availableFunctions(profile: ScaleProfile) {
-  const member = profile.team_members?.[0]
-  const values = [
-    ...(member?.instruments ?? []),
-    ...(member?.teams ?? []),
-    member?.function_role === 'lider' ? 'Líder' : null,
-  ].filter(Boolean) as string[]
-
-  return Array.from(new Set(values))
-}
-
 export function ScaleFormModal({
   events,
   profiles,
   initialSelectedMemberIds,
 }: ScaleFormModalProps) {
   const router = useRouter()
+  const supabase = useMemo(() => createClient(), [])
+  const [scheduleFunctions, setScheduleFunctions] = useState<ScheduleFunctionOption[]>([])
   const initialSelection = useMemo(() => {
     const selected = new Set(initialSelectedMemberIds ?? [])
     return Object.fromEntries(
       profiles
         .filter((profile) => selected.has(profile.id))
-        .map((profile) => [profile.id, availableFunctions(profile)[0] ?? ''])
+        .map((profile) => [profile.id, ''])
     )
   }, [initialSelectedMemberIds, profiles])
   const [open, setOpen] = useState((initialSelectedMemberIds?.length ?? 0) > 0)
@@ -117,10 +110,18 @@ export function ScaleFormModal({
   const selectedVocalists = useMemo(
     () => profiles.filter((profile) => {
       const assignedFunction = selectedMembers[profile.id]
-      return assignedFunction?.toLowerCase().includes('vocal')
+      return isVocalFunction(scheduleFunctions.find((item) => item.id === assignedFunction)?.category)
     }),
-    [profiles, selectedMembers]
+    [profiles, scheduleFunctions, selectedMembers]
   )
+
+  useEffect(() => {
+    void supabase.from('schedule_functions')
+      .select('id, display_name, category, is_active')
+      .eq('is_active', true)
+      .order('display_name')
+      .then(({ data }) => setScheduleFunctions((data ?? []) as ScheduleFunctionOption[]))
+  }, [supabase])
 
   function toggleMember(profile: ScaleProfile) {
     setSelectedMembers((current) => {
@@ -130,8 +131,7 @@ export function ScaleFormModal({
         return next
       }
 
-      const functions = availableFunctions(profile)
-      next[profile.id] = functions[0] ?? ''
+      next[profile.id] = scheduleFunctions[0]?.id ?? ''
       return next
     })
   }
@@ -145,8 +145,8 @@ export function ScaleFormModal({
     }
 
     const members = Object.entries(selectedMembers)
-      .filter(([, functionName]) => functionName)
-      .map(([profileId, functionName]) => ({ profileId, functionName }))
+      .filter(([, scheduleFunctionId]) => scheduleFunctionId)
+      .map(([profileId, scheduleFunctionId]) => ({ profileId, scheduleFunctionId }))
 
     if (members.length === 0) {
       toast.error('Selecione pelo menos um integrante.')
@@ -269,7 +269,6 @@ export function ScaleFormModal({
             <h3 className="text-sm font-semibold text-white">2. Escolher integrantes e funções</h3>
             <div className="space-y-2">
               {profiles.map((profile) => {
-                const functions = availableFunctions(profile)
                 const checked = profile.id in selectedMembers
                 return (
                   <div
@@ -281,11 +280,11 @@ export function ScaleFormModal({
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleMember(profile)}
-                        disabled={functions.length === 0}
+                        disabled={scheduleFunctions.length === 0}
                         className="h-4 w-4 rounded border-white/[0.08] accent-brand"
                       />
                       <span>{profile.full_name ?? 'Sem nome'}</span>
-                      {functions.length === 0 && (
+                      {scheduleFunctions.length === 0 && (
                         <span className="text-xs text-[#64748B]">sem funções cadastradas</span>
                       )}
                     </label>
@@ -298,8 +297,9 @@ export function ScaleFormModal({
                       disabled={!checked}
                       className="px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand disabled:opacity-40"
                     >
-                      {functions.map((functionName) => (
-                        <option key={functionName} value={functionName}>{functionName}</option>
+                      <option value="">Selecione uma função</option>
+                      {scheduleFunctions.map((scheduleFunction) => (
+                        <option key={scheduleFunction.id} value={scheduleFunction.id}>{scheduleFunction.display_name}</option>
                       ))}
                     </select>
                   </div>
