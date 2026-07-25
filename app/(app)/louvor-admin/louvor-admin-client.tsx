@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { ArrowDown, ArrowUp, BarChart3, CalendarPlus, CheckCircle2, ExternalLink, Folder, LayoutGrid, List, Music2, Plus, RefreshCw, Sparkles, Vote } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, BarChart3, CalendarPlus, CheckCircle2, ExternalLink, Folder, LayoutGrid, List, Music2, Plus, RefreshCw, Sparkles, Vote, Wrench } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { adicionarIndicacaoAoRepertorio, adicionarSugestaoRepertorioNaProximaEscala, atualizarMusicaVotacao, atualizarStatusIndicacao, criarSugestaoRepertorio, enviarMusicaParaVotacao } from './actions'
 import { gerarAnaliseEspiritualDoDia } from './spiritual-intelligence-actions'
+import { TechnicalAnalysisPanel } from './technical-analysis-panel'
 
 type Suggestion = {
   id: string
@@ -98,6 +99,7 @@ type SpiritualTrend = { category: 'themes' | 'needs' | 'emotions' | 'nextSteps';
 
 type CatalogSong = {
   id: string
+  songId: string
   title: string
   artist: string | null
   youtubeLink: string | null
@@ -109,6 +111,7 @@ const worshipTypes = ['Sacerdotal', 'Profético', 'Ambos']
 const songStatuses = ['Aprovada', 'Em teste', 'Repertório oficial', 'Pausada', 'Reprovada', 'Em análise', 'Necessita validação pastoral']
 const suggestionStatuses = ['Sugerida', 'Em análise', 'Analisada coletivamente', 'Analisada', 'Aprovada', 'Em teste', 'Repertório oficial', 'Pausada', 'Reprovada', 'Necessita validação pastoral']
 type AdminSection = 'votacao' | 'indicacoes' | 'inteligencia' | 'repertorios'
+type AnalysisPath = 'thematic' | 'technical' | null
 
 export function LouvorAdminClient({
   suggestions,
@@ -117,6 +120,7 @@ export function LouvorAdminClient({
   repertoireSuggestions,
   upcomingEvents,
   spiritualSummaries = [],
+  musicalAnalyses = [],
 }: {
   suggestions: Suggestion[]
   votingSongs: VotingSong[]
@@ -124,12 +128,14 @@ export function LouvorAdminClient({
   repertoireSuggestions: RepertoireSuggestion[]
   upcomingEvents: UpcomingEvent[]
   spiritualSummaries?: SpiritualSummary[]
+  musicalAnalyses?: Array<{ id: string; song_id: string; version: number; status: string; scores: import('@/lib/worship-musical-analysis').MusicalScores; ici_score: number; ico_score: number; created_at: string; reviewed_at: string | null }>
 }) {
   const [isPending, startTransition] = useTransition()
   const [selectedCatalogId, setSelectedCatalogId] = useState('manual')
   const selectedCatalog = useMemo(() => catalog.find((song) => song.id === selectedCatalogId), [catalog, selectedCatalogId])
   const [form, setForm] = useState({ songTitle: '', artist: '', youtubeLink: '', category: 'Adoração', worshipType: 'Ambos', theme: '' })
   const [activeSection, setActiveSection] = useState<AdminSection>('indicacoes')
+  const [analysisPath, setAnalysisPath] = useState<AnalysisPath>(null)
   const [suggestionView, setSuggestionView] = useState<'boards' | 'list'>('boards')
   const [selectedSuggestionDate, setSelectedSuggestionDate] = useState('')
   const [selectedEventByRepertoire, setSelectedEventByRepertoire] = useState<Record<string, string>>({})
@@ -235,7 +241,14 @@ export function LouvorAdminClient({
     })
   }
 
+  if (!analysisPath) return <div className="grid gap-5 md:grid-cols-2">
+    <AnalysisEntry icon={<Sparkles />} title="Análise Temática" description="Votação, indicações, inteligência espiritual e repertórios." onClick={() => setAnalysisPath('thematic')} />
+    <AnalysisEntry icon={<Wrench />} title="Análise Técnica" description="Complexidade intrínseca, aderência à equipe e histórico auditável." onClick={() => setAnalysisPath('technical')} />
+  </div>
+
   return <div className="space-y-6">
+    <Button type="button" variant="ghost" onClick={() => setAnalysisPath(null)} className="text-[#CBD5E1] hover:bg-white/10 hover:text-white"><ArrowLeft className="h-4 w-4" />Escolher tipo de análise</Button>
+    {analysisPath === 'technical' ? <TechnicalAnalysisPanel catalog={catalog} analyses={musicalAnalyses} /> : <>
     <section className="rounded-2xl border border-white/[0.08] bg-navy-900 p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div><Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Louvor Admin</Badge><h1 className="mt-2 text-2xl font-bold text-white">Gestão de louvor</h1><p className="text-sm text-[#94A3B8]">Votação, indicações, inteligência espiritual e repertórios agora ficam separados por menus internos.</p></div>
@@ -338,7 +351,12 @@ export function LouvorAdminClient({
     </section>}
 
     {activeSection === 'inteligencia' && <SpiritualIntelligencePanel groups={groupedSuggestions} summaries={spiritualSummaries} activeDate={activeSuggestionDate} isPending={isPending} onSelectDate={setSelectedSuggestionDate} onRunAnalysis={runDailySpiritualAnalysis} />}
+    </>}
   </div>
+}
+
+function AnalysisEntry({ icon, title, description, onClick }: { icon: React.ReactNode; title: string; description: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className="group rounded-2xl border border-white/[0.08] bg-navy-900 p-6 text-left transition hover:border-brand/50 hover:bg-brand/10"><span className="inline-flex rounded-2xl bg-brand/15 p-3 text-brand [&_svg]:h-6 [&_svg]:w-6">{icon}</span><h2 className="mt-5 text-xl font-bold text-white">{title}</h2><p className="mt-2 text-sm text-[#94A3B8]">{description}</p><span className="mt-5 inline-block text-sm font-semibold text-brand">Acessar análise →</span></button>
 }
 
 

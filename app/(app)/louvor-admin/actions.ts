@@ -7,6 +7,7 @@ type SpiritualSummaryRow = { id: string; run_id: string; analysis_date: string; 
 
 type CatalogRow = {
   id: string
+  song_id: string
   artist: string | null
   moment: string | null
   youtube_url: string | null
@@ -16,7 +17,7 @@ type CatalogRow = {
 export async function listarAdministracaoLouvor() {
   const { supabase } = await requireWorshipAdmin()
 
-  const [suggestions, votingSongs, catalog, repertoireSuggestions, upcomingEvents, spiritualSummaries] = await Promise.all([
+  const [suggestions, votingSongs, catalog, repertoireSuggestions, upcomingEvents, spiritualSummaries, musicalAnalyses] = await Promise.all([
     supabase
       .from('worship_song_suggestions' as never)
       .select('*')
@@ -28,7 +29,7 @@ export async function listarAdministracaoLouvor() {
       .order('song_title'),
     supabase
       .from('song_variations')
-      .select('id, artist, moment, youtube_url, songs(id, title, artist, youtube_url)')
+      .select('id, song_id, artist, moment, youtube_url, songs(id, title, artist, youtube_url)')
       .order('created_at', { ascending: false }),
     supabase
       .from('repertoire_suggestions' as never)
@@ -47,6 +48,11 @@ export async function listarAdministracaoLouvor() {
       .select('*')
       .order('analysis_date', { ascending: false })
       .limit(20),
+    supabase
+      .from('song_musical_analyses' as never)
+      .select('id, song_id, version, status, scores, ici_score, ico_score, created_at, reviewed_at')
+      .not('song_id', 'is', null)
+      .order('created_at', { ascending: false }),
   ])
 
   return {
@@ -55,8 +61,10 @@ export async function listarAdministracaoLouvor() {
     repertoireSuggestions: repertoireSuggestions.data ?? [],
     upcomingEvents: upcomingEvents.data ?? [],
     spiritualSummaries: (spiritualSummaries.data ?? []) as unknown as SpiritualSummaryRow[],
+    musicalAnalyses: musicalAnalyses.data ?? [],
     catalog: ((catalog.data ?? []) as unknown as CatalogRow[]).map((item) => ({
       id: item.id,
+      songId: item.song_id,
       title: item.songs?.title ?? 'Música sem título',
       artist: item.artist ?? item.songs?.artist ?? null,
       youtubeLink: item.youtube_url ?? item.songs?.youtube_url ?? null,
