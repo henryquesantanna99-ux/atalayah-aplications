@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, Music2, SlidersHorizontal } from 'lucide-react'
+import { BarChart3, ChevronLeft, ChevronRight, Music2, SlidersHorizontal } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/layout/page-header'
 import { MomentBadge } from '@/components/ui/moment-badge'
@@ -60,13 +60,22 @@ export default async function ProximoEventoPage() {
         subtitle={nextEvent ? formatEventTitle(nextEvent) : 'Músicas para estudo'}
       />
       <main className="p-6 space-y-4">
-        <Link
-          href="/estudo"
-          className="inline-flex items-center gap-1.5 text-sm text-[#94A3B8] hover:text-white transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Voltar
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link
+            href="/estudo"
+            className="inline-flex items-center gap-1.5 text-sm text-[#94A3B8] hover:text-white transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Voltar
+          </Link>
+          <Link
+            href={nextEvent ? `/estudo/proximo-evento/analise?repertorio=${nextEvent.id}` : '/estudo/proximo-evento/analise'}
+            className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-300/20"
+          >
+            <BarChart3 className="h-4 w-4" />
+            Análise de Repertório
+          </Link>
+        </div>
 
         {!nextEvent ? (
           <div className="flex flex-col items-center justify-center py-20 text-center border border-white/[0.06] rounded-modal">
