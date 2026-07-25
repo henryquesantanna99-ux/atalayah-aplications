@@ -11,6 +11,7 @@ import type { EventMember, Profile, SetlistSong } from '@/types/database'
 import { assignEventMember, deleteEvent, removeEventMember } from './actions'
 import { EventFormModal } from './event-form-modal'
 import { CreateMeetButton } from '../comunhao/create-meet-button'
+import type { ScheduleFunctionOption } from '@/lib/schedule-functions'
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
   culto: 'Culto',
@@ -57,6 +58,7 @@ interface DayDetailModalProps {
 
 type EventMemberWithProfile = EventMember & {
   profiles: Pick<Profile, 'id' | 'full_name' | 'avatar_url'> | null
+  schedule_functions: Pick<ScheduleFunctionOption, 'display_name' | 'category'> | null
 }
 
 type EventSetlistSong = Pick<
@@ -82,6 +84,7 @@ export function DayDetailModal({
   const [loading, setLoading] = useState(true)
   const [selectedProfileId, setSelectedProfileId] = useState('')
   const [instrument, setInstrument] = useState('')
+  const [scheduleFunctions, setScheduleFunctions] = useState<ScheduleFunctionOption[]>([])
   const [adminProcessing, setAdminProcessing] = useState<string | null>(null)
 
   const parsedDate = new Date(date + 'T12:00:00')
@@ -90,10 +93,10 @@ export function DayDetailModal({
   useEffect(() => {
     async function fetchEventData() {
       setLoading(true)
-      const [membersResult, songsResult, profilesResult] = await Promise.all([
+      const [membersResult, songsResult, profilesResult, functionsResult] = await Promise.all([
         supabase
           .from('event_members')
-          .select('*, profiles(id, full_name, avatar_url)')
+          .select('*, profiles(id, full_name, avatar_url), schedule_functions(display_name, category)')
           .eq('event_id', selectedEvent.id),
         supabase
           .from('setlist_songs')
@@ -107,12 +110,16 @@ export function DayDetailModal({
               .eq('status', 'active')
               .order('full_name')
           : Promise.resolve({ data: [] }),
+        isAdmin
+          ? supabase.from('schedule_functions').select('id, display_name, category, is_active').eq('is_active', true).order('display_name')
+          : Promise.resolve({ data: [] }),
       ])
 
       const membersList = (membersResult.data ?? []) as EventMemberWithProfile[]
       setMembers(membersList)
       setSongs((songsResult.data ?? []) as EventSetlistSong[])
       setProfiles((profilesResult.data ?? []) as Pick<Profile, 'id' | 'full_name'>[])
+      setScheduleFunctions((functionsResult.data ?? []) as ScheduleFunctionOption[])
 
       const mine = membersList.find((m) => m.profile_id === userId)
       setMyMembership(mine ?? null)
@@ -165,13 +172,17 @@ export function DayDetailModal({
       toast.error('Selecione um integrante.')
       return
     }
+    if (!instrument) {
+      toast.error('Selecione uma função normalizada.')
+      return
+    }
 
     setAdminProcessing('assign-member')
     try {
       await assignEventMember({
         eventId: selectedEvent.id,
         profileId: selectedProfileId,
-        instrument: instrument.trim() || null,
+        scheduleFunctionId: instrument,
       })
       toast.success('Integrante adicionado à escala.')
       setSelectedProfileId('')
@@ -180,7 +191,7 @@ export function DayDetailModal({
 
       const { data } = await supabase
         .from('event_members')
-        .select('*, profiles(id, full_name, avatar_url)')
+        .select('*, profiles(id, full_name, avatar_url), schedule_functions(display_name, category)')
         .eq('event_id', selectedEvent.id)
       setMembers((data ?? []) as EventMemberWithProfile[])
     } catch (error) {
@@ -403,12 +414,14 @@ export function DayDetailModal({
                           </option>
                         ))}
                     </select>
-                    <input
+                    <select
                       value={instrument}
                       onChange={(event) => setInstrument(event.target.value)}
-                      placeholder="Função"
                       className="px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
-                    />
+                    >
+                      <option value="">Função</option>
+                      {scheduleFunctions.map((item) => <option key={item.id} value={item.id}>{item.display_name}</option>)}
+                    </select>
                     <button
                       type="submit"
                       disabled={adminProcessing === 'assign-member'}
@@ -439,9 +452,9 @@ export function DayDetailModal({
                           </AvatarFallback>
                         </Avatar>
                         <span className="text-sm text-white flex-1">{member.profiles?.full_name}</span>
-                        {member.instrument && (
-                          <span className="text-xs text-[#64748B]">{member.instrument}</span>
-                        )}
+                        <span className={member.schedule_function_id ? 'text-xs text-[#64748B]' : 'text-xs text-amber-300'}>
+                          {member.schedule_functions?.display_name ?? (member.instrument ? `Legado: ${member.instrument} — corrigir` : 'Função pendente — corrigir')}
+                        </span>
                         {member.confirmed ? (
                           <Check className="w-4 h-4 text-emerald-400" aria-label="Confirmado" />
                         ) : (

@@ -134,6 +134,7 @@ export interface Database {
           event_id: string
           profile_id: string
           instrument: string | null
+          schedule_function_id: string | null
           confirmed: boolean
           confirmed_at: string | null
           created_at: string
@@ -143,14 +144,38 @@ export interface Database {
           event_id: string
           profile_id: string
           instrument?: string | null
+          schedule_function_id?: string | null
           confirmed?: boolean
           confirmed_at?: string | null
           created_at?: string
         }
         Update: {
           instrument?: string | null
+          schedule_function_id?: string | null
           confirmed?: boolean
           confirmed_at?: string | null
+        }
+        Relationships: []
+      }
+      schedule_functions: {
+        Row: {
+          id: string
+          display_name: string
+          category: 'band' | 'vocal' | 'sound' | 'other'
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id: string
+          display_name: string
+          category: 'band' | 'vocal' | 'sound' | 'other'
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          display_name?: string
+          category?: 'band' | 'vocal' | 'sound' | 'other'
+          is_active?: boolean
         }
         Relationships: []
       }

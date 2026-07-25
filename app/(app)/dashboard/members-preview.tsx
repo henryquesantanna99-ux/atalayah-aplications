@@ -7,11 +7,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/lib/supabase/client'
 import { useProfile } from '@/components/layout/profile-context'
 import { toast } from 'sonner'
+import { isVocalFunction, type ScheduleFunctionCategory } from '@/lib/schedule-functions'
 
 interface MemberWithProfile {
   id: string
   profile_id: string
   instrument: string | null
+  schedule_function_id: string | null
+  schedule_functions: {
+    display_name: string
+    category: ScheduleFunctionCategory
+  } | null
   confirmed: boolean
   profiles: {
     id: string
@@ -97,9 +103,9 @@ export function MembersPreview({ members, eventId, songs }: MembersPreviewProps)
                     {member.profiles?.full_name ?? 'Membro'}
                   </p>
                   <p className="text-xs text-[#64748B]">
-                    {member.instrument ?? 'Função não definida'}
+                    {member.schedule_functions?.display_name ?? member.instrument ?? 'Função não definida'}
                   </p>
-                  {member.instrument?.toLowerCase().includes('vocal') && (
+                  {isVocalFunction(member.schedule_functions?.category) && (
                     <p className="text-xs text-brand truncate">
                       {songs
                         .filter((song) => song.soloist_id === member.profile_id)

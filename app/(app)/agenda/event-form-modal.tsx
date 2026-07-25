@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { createScale } from './actions'
+import type { ScheduleFunctionOption } from '@/lib/schedule-functions'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
@@ -137,16 +138,6 @@ function newSongDraft(): EventSongDraft {
   }
 }
 
-function availableFunctions(profile: ProfileOption) {
-  const member = profile.team_members?.[0]
-  const values = [
-    ...(member?.instruments ?? []),
-    ...(member?.teams ?? []),
-    member?.function_role === 'lider' ? 'Líder' : null,
-  ].filter(Boolean) as string[]
-  return Array.from(new Set(values))
-}
-
 export function EventFormModal({
   event,
   profiles = [],
@@ -162,6 +153,8 @@ export function EventFormModal({
   const [saving, setSaving] = useState(false)
   const [loadingExisting, setLoadingExisting] = useState(false)
   const [catalogSongs, setCatalogSongs] = useState<CatalogSong[]>([])
+  const [scheduleFunctions, setScheduleFunctions] = useState<ScheduleFunctionOption[]>([])
+  const [legacyAssignments, setLegacyAssignments] = useState<Record<string, string>>({})
   const [catalogLoaded, setCatalogLoaded] = useState(false)
   const [songSearchByDraft, setSongSearchByDraft] = useState<Record<string, string>>({})
 
@@ -220,8 +213,7 @@ export function EventFormModal({
         delete next[profile.id]
         return next
       }
-      const functions = availableFunctions(profile)
-      next[profile.id] = functions[0] ?? ''
+      next[profile.id] = scheduleFunctions[0]?.id ?? ''
       return next
     })
   }
@@ -252,17 +244,23 @@ export function EventFormModal({
     if (!event) return
     setLoadingExisting(true)
     try {
-      const [{ data: memberRows, error: memberError }, { data: songRows, error: songError }] = await Promise.all([
-        supabase.from('event_members').select('profile_id, instrument').eq('event_id', event.id),
+      const [{ data: memberRows, error: memberError }, { data: songRows, error: songError }, { data: functionRows, error: functionError }] = await Promise.all([
+        supabase.from('event_members').select('profile_id, instrument, schedule_function_id').eq('event_id', event.id),
         supabase
           .from('setlist_songs')
           .select('id, song_id, song_title, artist, key_note, moment, soloist_id, version, reference_link, order_index')
           .eq('event_id', event.id)
           .order('order_index'),
+        supabase.from('schedule_functions').select('id, display_name, category, is_active').eq('is_active', true).order('display_name'),
       ])
       if (memberError) throw memberError
       if (songError) throw songError
-      setSelectedMembers(Object.fromEntries((memberRows ?? []).map((row) => [row.profile_id, row.instrument ?? ''])))
+      if (functionError) throw functionError
+      setScheduleFunctions((functionRows ?? []) as ScheduleFunctionOption[])
+      setSelectedMembers(Object.fromEntries((memberRows ?? []).map((row) => [row.profile_id, row.schedule_function_id ?? ''])))
+      setLegacyAssignments(Object.fromEntries((memberRows ?? [])
+        .filter((row) => !row.schedule_function_id && row.instrument)
+        .map((row) => [row.profile_id, row.instrument as string])))
       setSongs((songRows ?? []).length > 0
         ? (songRows ?? []).map((row) => ({
             id: row.id,
@@ -285,12 +283,17 @@ export function EventFormModal({
   }
 
   async function handleOpenChange(val: boolean) {
-    if (val && event) await loadExistingEvent()
+    if (val && !event && scheduleFunctions.length === 0) {
+      const { data, error } = await supabase.from('schedule_functions').select('id, display_name, category, is_active').eq('is_active', true).order('display_name')
+      if (error) toast.error('Erro ao carregar as funções da escala.')
+      else setScheduleFunctions((data ?? []) as ScheduleFunctionOption[])
+    }
     setOpen(val)
     if (val && event) void loadExistingEvent()
     if (!val) {
       setStep(1)
       setSelectedMembers({})
+      setLegacyAssignments({})
       setSongs([newSongDraft()])
       setSongSearchByDraft({})
       if (!isEditing) setForm(emptyForm)
@@ -313,10 +316,16 @@ export function EventFormModal({
       toast.error('Informe o título do evento.')
       return
     }
+    const unresolvedLegacy = Object.keys(legacyAssignments)
+      .some((profileId) => profileId in selectedMembers && !selectedMembers[profileId])
+    if (unresolvedLegacy) {
+      toast.error('Corrija as funções legadas destacadas antes de salvar.')
+      return
+    }
 
     const members = Object.entries(selectedMembers)
-      .filter(([, fn]) => Boolean(fn))
-      .map(([profileId, functionName]) => ({ profileId, functionName: functionName as string }))
+      .filter(([, scheduleFunctionId]) => Boolean(scheduleFunctionId))
+      .map(([profileId, scheduleFunctionId]) => ({ profileId, scheduleFunctionId }))
 
     const validSongs = songs.filter((s) => s.title.trim())
 
@@ -437,18 +446,14 @@ export function EventFormModal({
                 ) : (
                   <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                     {profiles.map((profile) => {
-                      const currentFunction = selectedMembers[profile.id]
-                      const functions = Array.from(new Set([
-                        ...availableFunctions(profile),
-                        ...(currentFunction ? [currentFunction] : []),
-                      ]))
                       const checked = profile.id in selectedMembers
+                      const legacyValue = legacyAssignments[profile.id]
                       return (
                         <div key={profile.id} className="grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-2 rounded-card border border-white/[0.06] bg-navy-800/50 p-3">
                           <label className="flex items-center gap-2 text-sm text-white">
-                            <input type="checkbox" checked={checked} onChange={() => toggleMember(profile)} disabled={functions.length === 0} className="h-4 w-4 rounded border-white/[0.08] accent-brand" />
+                            <input type="checkbox" checked={checked} onChange={() => toggleMember(profile)} disabled={scheduleFunctions.length === 0} className="h-4 w-4 rounded border-white/[0.08] accent-brand" />
                             <span>{profile.full_name ?? 'Sem nome'}</span>
-                            {functions.length === 0 && <span className="text-xs text-[#64748B]">sem funções</span>}
+                            {legacyValue && <span className="text-xs text-amber-300">corrigir: “{legacyValue}”</span>}
                           </label>
                           <select
                             value={selectedMembers[profile.id] ?? ''}
@@ -456,7 +461,8 @@ export function EventFormModal({
                             disabled={!checked}
                             className="px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand disabled:opacity-40"
                           >
-                            {functions.map((fn) => <option key={fn} value={fn}>{fn}</option>)}
+                            <option value="">Selecione uma função</option>
+                            {scheduleFunctions.map((fn) => <option key={fn.id} value={fn.id}>{fn.display_name}</option>)}
                           </select>
                         </div>
                       )

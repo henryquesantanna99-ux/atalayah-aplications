@@ -43,7 +43,7 @@ export default async function TimePage() {
           type,
           date,
           start_time,
-          event_members(id, instrument, profiles(id, full_name)),
+          event_members(id, instrument, schedule_function_id, schedule_functions(display_name, category), profiles(id, full_name)),
           setlist_songs(id, song_title, key_note, profiles(id, full_name))
         `)
         .order('date', { ascending: false })
