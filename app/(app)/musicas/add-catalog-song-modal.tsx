@@ -17,6 +17,8 @@ import { buildStemStoragePath, detectStemType, isAudioFileName } from '@/lib/ste
 import { addCatalogSong, editCatalogSong } from './catalog-actions'
 import type { Json } from '@/types/database'
 
+const TEAM_MASTERY_OPTIONS = ['100% da equipe', 'Apenas a banda', 'Apenas os vocais', 'Só algumas pessoas'] as const
+
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
   'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm']
 const MOMENTS = ['Prévia', 'Adoração', 'Palavra', 'Celebração'] as const
@@ -47,6 +49,7 @@ interface AddCatalogSongModalProps {
     albumName: string | null
     metadataSource: string | null
     metadataPayload: Json
+    teamMastery: typeof TEAM_MASTERY_OPTIONS[number]
   }
 }
 
@@ -67,6 +70,7 @@ const emptyForm = {
   album_name: '',
   metadata_source: '',
   metadata_payload: {} as Json,
+  team_mastery: 'Só algumas pessoas' as typeof TEAM_MASTERY_OPTIONS[number],
 }
 
 interface YouTubeResult {
@@ -97,7 +101,7 @@ export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps
     youtube_video_id: song.youtubeVideoId ?? '', youtube_thumbnail: song.youtubeThumbnail ?? '',
     youtube_duration: song.youtubeDuration ?? '', bpm: song.bpm ? String(song.bpm) : '',
     lyrics_plain: song.lyricsPlain ?? '', lyrics_synced: song.lyricsSynced ?? '', album_name: song.albumName ?? '',
-    metadata_source: song.metadataSource ?? '', metadata_payload: song.metadataPayload ?? {},
+    metadata_source: song.metadataSource ?? '', metadata_payload: song.metadataPayload ?? {}, team_mastery: song.teamMastery,
   } : emptyForm
   const [form, setForm] = useState(initialForm)
   const [multitrackFiles, setMultitrackFiles] = useState<File[]>([])
@@ -222,6 +226,10 @@ export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps
       toast.error('O título da música é obrigatório.')
       return
     }
+    if (!TEAM_MASTERY_OPTIONS.includes(form.team_mastery)) {
+      toast.error('Selecione um nível de domínio da equipe válido.')
+      return
+    }
 
     setSaving(true)
     try {
@@ -242,6 +250,7 @@ export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps
         albumName: form.album_name || null,
         metadataSource: form.metadata_source || null,
         metadataPayload: form.metadata_payload,
+        teamMastery: form.team_mastery,
       }
       const result = song
         ? await editCatalogSong(song.songId, song.variationId, payload)
@@ -445,6 +454,13 @@ export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps
                   </div>
                 </div>
               )}
+            </div>
+
+            <div className="col-span-2">
+              <label htmlFor="cat-team-mastery" className="block text-xs text-[#94A3B8] mb-1">Qual nível de domínio da equipe?</label>
+              <select id="cat-team-mastery" name="team_mastery" required value={form.team_mastery} onChange={handleChange} className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand">
+                {TEAM_MASTERY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
             </div>
           </div>
 

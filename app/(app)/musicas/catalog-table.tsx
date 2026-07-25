@@ -5,7 +5,9 @@ import { Music, Trash2, ExternalLink, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { MomentBadge } from '@/components/ui/moment-badge'
 import type { SongVariationWithDetails } from '@/types/database'
-import { deleteCatalogSong } from './catalog-actions'
+import { deleteCatalogSong, updateTeamMastery } from './catalog-actions'
+import { calculateRepertoireReadiness, TEAM_MASTERY_OPTIONS } from './catalog-team-mastery'
+import type { TeamMastery } from '@/types/database'
 import { AddCatalogSongModal } from './add-catalog-song-modal'
 
 interface CatalogTableProps {
@@ -105,6 +107,7 @@ export function CatalogTable({ variations, isEditor, profiles }: CatalogTablePro
                 {v.version && (
                   <span className="text-xs text-[#64748B]">{v.version}</span>
                 )}
+                <span className="text-xs text-brand">{v.songs.team_mastery}</span>
               </div>
               {v.youtube_url && (
                 <a href={v.youtube_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-brand hover:text-brand-light">
@@ -164,13 +167,14 @@ export function CatalogTable({ variations, isEditor, profiles }: CatalogTablePro
                   <input className={inputClass} placeholder="Filtrar..." value={filters.version} onChange={(e) => setFilter('version', e.target.value)} />
                 </div>
               </th>
+              <th className="text-left py-3 px-4 text-xs font-medium text-[#64748B]">Domínio / análise</th>
               {isEditor && <th className="w-16 py-3 px-4" />}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={isEditor ? 7 : 6} className="py-16">
+                <td colSpan={isEditor ? 8 : 7} className="py-16">
                   <EmptyState isEditor={isEditor} />
                 </td>
               </tr>
@@ -219,6 +223,9 @@ export function CatalogTable({ variations, isEditor, profiles }: CatalogTablePro
                         {v.song_stems?.length} faixa(s)
                       </span>
                     )}
+                  </td>
+                  <td className="py-3 px-4">
+                    <MasteryAnalysis songId={v.song_id} value={v.songs.team_mastery} editable={isEditor} />
                   </td>
                   {isEditor && (
                     <td className="py-3 px-4">
@@ -272,7 +279,36 @@ function SongEditModal({ variation, profiles }: { variation: SongVariationWithDe
     albumName: variation.songs.album_name,
     metadataSource: variation.songs.metadata_source,
     metadataPayload: variation.songs.metadata_payload,
+    teamMastery: variation.songs.team_mastery,
   }} />
+}
+
+function MasteryAnalysis({ songId, value, editable }: { songId: string; value: TeamMastery; editable: boolean }) {
+  const [mastery, setMastery] = useState(value)
+  const [saving, setSaving] = useState(false)
+  const readiness = calculateRepertoireReadiness(mastery)
+
+  async function change(next: TeamMastery) {
+    const previous = mastery
+    setMastery(next)
+    setSaving(true)
+    try {
+      const result = await updateTeamMastery(songId, next)
+      toast.success(`Domínio atualizado · IP ${result.ip} · ${result.level} · ${result.suggestedStage}`)
+    } catch (error) {
+      setMastery(previous)
+      toast.error(error instanceof Error ? error.message : 'Não foi possível atualizar o domínio.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <div className="min-w-40 space-y-1">
+    {editable ? <select aria-label="Qual nível de domínio da equipe?" value={mastery} disabled={saving} onChange={(event) => void change(event.target.value as TeamMastery)} className="max-w-44 rounded bg-navy-800 border border-white/[0.08] px-2 py-1 text-xs text-white disabled:opacity-50">
+      {TEAM_MASTERY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+    </select> : <p className="text-xs text-white">{mastery}</p>}
+    <p className="text-[11px] text-[#64748B]">IP {readiness.readinessIndex} · {readiness.readinessLevel} · {readiness.suggestedStage}</p>
+  </div>
 }
 
 function EmptyState({ isEditor }: { isEditor: boolean }) {

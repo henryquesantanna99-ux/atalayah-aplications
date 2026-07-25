@@ -10,7 +10,10 @@ export default async function MusicasPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isEditor = canEdit(user?.email)
+  const { data: currentProfile } = user
+    ? await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    : { data: null }
+  const isEditor = canEdit(user?.email) || currentProfile?.role === 'admin'
 
   // Fetch the catalog variations and the base songs separately.
   // Some songs may exist before a variation row is created; those are still
@@ -18,11 +21,11 @@ export default async function MusicasPage() {
   const [{ data: variationsData }, { data: songsData }] = await Promise.all([
     supabase
       .from('song_variations')
-      .select('*, songs(id, title, artist, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload), profiles(id, full_name)')
+      .select('*, songs(id, title, artist, team_mastery, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload), profiles(id, full_name)')
       .order('created_at', { ascending: false }),
     supabase
       .from('songs')
-      .select('id, title, artist, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload, created_at, song_stems(id, stem_type, original_file_name)')
+      .select('id, title, artist, team_mastery, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload, created_at, song_stems(id, stem_type, original_file_name)')
       .order('created_at', { ascending: false }),
   ])
 
@@ -66,6 +69,7 @@ function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): Song
     id: string
     title: string
     artist: string | null
+    team_mastery: import('@/types/database').TeamMastery
     youtube_url: string | null
     youtube_video_id: string | null
     youtube_thumbnail: string | null
@@ -104,6 +108,7 @@ function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): Song
         id: song.id,
         title: song.title,
         artist: song.artist,
+        team_mastery: song.team_mastery,
         youtube_url: song.youtube_url,
         youtube_video_id: song.youtube_video_id,
         youtube_thumbnail: song.youtube_thumbnail,
