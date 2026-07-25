@@ -6,6 +6,12 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type TeamMastery =
+  | '100% da equipe'
+  | 'Apenas a banda'
+  | 'Apenas os vocais'
+  | 'Só algumas pessoas'
+
 export interface Database {
   public: {
     Tables: {
@@ -238,6 +244,7 @@ export interface Database {
           id: string
           title: string
           artist: string | null
+          team_mastery: TeamMastery
           youtube_video_id: string | null
           youtube_url: string | null
           youtube_thumbnail: string | null
@@ -259,6 +266,7 @@ export interface Database {
           id?: string
           title: string
           artist?: string | null
+          team_mastery?: TeamMastery
           youtube_video_id?: string | null
           youtube_url?: string | null
           youtube_thumbnail?: string | null
@@ -279,6 +287,7 @@ export interface Database {
         Update: {
           title?: string
           artist?: string | null
+          team_mastery?: TeamMastery
           youtube_video_id?: string | null
           youtube_url?: string | null
           youtube_thumbnail?: string | null
@@ -659,7 +668,7 @@ export type LaiaMessageInsert = Database['public']['Tables']['laia_messages']['I
 export type LaiaUsage = Database['public']['Tables']['laia_usage']['Row']
 
 export interface SongVariationWithDetails extends SongVariation {
-  songs: Pick<Song, 'id' | 'title' | 'artist' | 'youtube_video_id' | 'youtube_url' | 'youtube_thumbnail' | 'youtube_duration' | 'bpm' | 'default_key' | 'album_name' | 'lyrics_plain' | 'lyrics_synced' | 'metadata_source' | 'metadata_payload'>
+  songs: Pick<Song, 'id' | 'title' | 'artist' | 'team_mastery' | 'youtube_video_id' | 'youtube_url' | 'youtube_thumbnail' | 'youtube_duration' | 'bpm' | 'default_key' | 'album_name' | 'lyrics_plain' | 'lyrics_synced' | 'metadata_source' | 'metadata_payload'>
   profiles: Pick<Profile, 'id' | 'full_name'> | null
   song_stems?: Pick<SongStem, 'id' | 'stem_type' | 'original_file_name'>[]
   is_virtual?: boolean
