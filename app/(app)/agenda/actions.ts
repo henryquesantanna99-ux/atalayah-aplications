@@ -216,6 +216,61 @@ export async function createScale(input: {
     if (songsError) throw new Error(songsError.message)
   }
 
+  if (input.event.type === 'culto') {
+    // Repertoires are versioned separately from the editable legacy setlist. This
+    // keeps the execution that actually happened available for historical analysis.
+    const { data: latestRepertoire, error: repertoireLookupError } = await supabase
+      .from('repertoires')
+      .select('id, version, status')
+      .eq('event_id', eventId)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (repertoireLookupError) throw new Error(repertoireLookupError.message)
+
+    if (latestRepertoire && latestRepertoire.status !== 'archived') {
+      const { error: archiveError } = await supabase
+        .from('repertoires')
+        .update({ status: 'archived', archived_at: new Date().toISOString() })
+        .eq('id', latestRepertoire.id)
+      if (archiveError) throw new Error(archiveError.message)
+    }
+
+    const eventIsPast = input.event.date < new Date().toISOString().slice(0, 10)
+    const { data: repertoire, error: repertoireError } = await supabase
+      .from('repertoires')
+      .insert({
+        event_id: eventId,
+        name: input.event.title,
+        event_date: input.event.date,
+        status: eventIsPast ? 'consolidated' : 'draft',
+        version: (latestRepertoire?.version ?? 0) + 1,
+      })
+      .select('id')
+      .single()
+
+    if (repertoireError) throw new Error(repertoireError.message)
+
+    const catalogSongs = validSongs.filter(
+      (song): song is typeof song & { songId: string } => Boolean(song.songId)
+    )
+    if (catalogSongs.length > 0) {
+      const { error: repertoireItemsError } = await supabase.from('repertoire_items').insert(
+        catalogSongs.map((song, index) => ({
+          repertoire_id: repertoire.id,
+          song_id: song.songId,
+          order_index: index,
+          key_note: song.keyNote,
+          arrangement_changed: Boolean(song.version?.trim()),
+          arrangement_notes: song.version?.trim() || null,
+          liturgical_moment: song.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null,
+        }))
+      )
+      if (repertoireItemsError) throw new Error(repertoireItemsError.message)
+    }
+  }
+
   revalidatePath('/agenda')
   revalidatePath('/dashboard')
   revalidatePath('/musicas')

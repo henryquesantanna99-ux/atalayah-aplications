@@ -239,6 +239,127 @@ export interface Database {
         }
         Relationships: []
       }
+      repertoires: {
+        Row: {
+          id: string
+          event_id: string
+          name: string
+          event_date: string
+          status: Database['public']['Enums']['repertoire_status']
+          version: number
+          archived_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          name: string
+          event_date: string
+          status?: Database['public']['Enums']['repertoire_status']
+          version?: number
+          archived_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          event_id?: string
+          name?: string
+          event_date?: string
+          status?: Database['public']['Enums']['repertoire_status']
+          version?: number
+          archived_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'repertoires_event_id_fkey'; columns: ['event_id']; referencedRelation: 'events'; referencedColumns: ['id'] }
+        ]
+      }
+      repertoire_items: {
+        Row: {
+          id: string
+          repertoire_id: string
+          song_id: string
+          order_index: number
+          key_note: string | null
+          arrangement_changed: boolean
+          arrangement_notes: string | null
+          liturgical_moment: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          repertoire_id: string
+          song_id: string
+          order_index?: number
+          key_note?: string | null
+          arrangement_changed?: boolean
+          arrangement_notes?: string | null
+          liturgical_moment?: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          repertoire_id?: string
+          song_id?: string
+          order_index?: number
+          key_note?: string | null
+          arrangement_changed?: boolean
+          arrangement_notes?: string | null
+          liturgical_moment?: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'repertoire_items_repertoire_id_fkey'; columns: ['repertoire_id']; referencedRelation: 'repertoires'; referencedColumns: ['id'] },
+          { foreignKeyName: 'repertoire_items_song_id_fkey'; columns: ['song_id']; referencedRelation: 'songs'; referencedColumns: ['id'] }
+        ]
+      }
+      repertoire_item_analyses: {
+        Row: {
+          id: string
+          repertoire_item_id: string
+          recency_days: number | null
+          team_mastery: Database['public']['Enums']['repertoire_mastery']
+          rotation: Database['public']['Enums']['repertoire_rotation']
+          strategic_weight: Database['public']['Enums']['repertoire_strategic_weight']
+          ip: number
+          ici: number
+          ico: number
+          kanban_stage: Database['public']['Enums']['repertoire_kanban_stage']
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          repertoire_item_id: string
+          recency_days?: number | null
+          team_mastery: Database['public']['Enums']['repertoire_mastery']
+          rotation: Database['public']['Enums']['repertoire_rotation']
+          strategic_weight: Database['public']['Enums']['repertoire_strategic_weight']
+          ip: number
+          ici: number
+          ico: number
+          kanban_stage?: Database['public']['Enums']['repertoire_kanban_stage']
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          repertoire_item_id?: string
+          recency_days?: number | null
+          team_mastery?: Database['public']['Enums']['repertoire_mastery']
+          rotation?: Database['public']['Enums']['repertoire_rotation']
+          strategic_weight?: Database['public']['Enums']['repertoire_strategic_weight']
+          ip?: number
+          ici?: number
+          ico?: number
+          kanban_stage?: Database['public']['Enums']['repertoire_kanban_stage']
+          updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: 'repertoire_item_analyses_repertoire_item_id_fkey'; columns: ['repertoire_item_id']; referencedRelation: 'repertoire_items'; referencedColumns: ['id'] }
+        ]
+      }
       songs: {
         Row: {
           id: string
@@ -620,7 +741,13 @@ export interface Database {
     }
     Views: Record<string, never>
     Functions: Record<string, never>
-    Enums: Record<string, never>
+    Enums: {
+      repertoire_status: 'draft' | 'consolidated' | 'archived'
+      repertoire_mastery: 'low' | 'medium' | 'high'
+      repertoire_rotation: 'low' | 'balanced' | 'high'
+      repertoire_strategic_weight: 'low' | 'medium' | 'high'
+      repertoire_kanban_stage: 'backlog' | 'analysis' | 'rehearsal' | 'ready' | 'performed'
+    }
     CompositeTypes: Record<string, never>
   }
 }
@@ -643,6 +770,17 @@ export type EventMemberInsert = Database['public']['Tables']['event_members']['I
 export type SetlistSong = Database['public']['Tables']['setlist_songs']['Row']
 export type SetlistSongInsert = Database['public']['Tables']['setlist_songs']['Insert']
 export type SetlistSongUpdate = Database['public']['Tables']['setlist_songs']['Update']
+
+
+export type Repertoire = Database['public']['Tables']['repertoires']['Row']
+export type RepertoireInsert = Database['public']['Tables']['repertoires']['Insert']
+export type RepertoireUpdate = Database['public']['Tables']['repertoires']['Update']
+export type RepertoireItem = Database['public']['Tables']['repertoire_items']['Row']
+export type RepertoireItemInsert = Database['public']['Tables']['repertoire_items']['Insert']
+export type RepertoireItemUpdate = Database['public']['Tables']['repertoire_items']['Update']
+export type RepertoireItemAnalysis = Database['public']['Tables']['repertoire_item_analyses']['Row']
+export type RepertoireItemAnalysisInsert = Database['public']['Tables']['repertoire_item_analyses']['Insert']
+export type RepertoireItemAnalysisUpdate = Database['public']['Tables']['repertoire_item_analyses']['Update']
 
 export type Song = Database['public']['Tables']['songs']['Row']
 export type SongInsert = Database['public']['Tables']['songs']['Insert']
