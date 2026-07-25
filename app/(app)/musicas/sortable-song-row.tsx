@@ -6,6 +6,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Pencil, Trash2, Check, X, ExternalLink } from 'lucide-react'
 import { MomentBadge } from '@/components/ui/moment-badge'
 import type { SetlistSong } from '@/types/database'
+import { summarizeSongChanges } from '@/lib/music/readiness'
 
 const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
   'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm']
@@ -96,6 +97,7 @@ export function SortableSongRow({
             aria-label="Título da música"
           />
         </td>
+        <td className="py-2 px-4 text-xs text-[#64748B]" colSpan={2}>As mudanças são editadas na Agenda.</td>
         <td className="py-2 px-4">
           <input
             value={draft.artist}
@@ -222,6 +224,17 @@ export function SortableSongRow({
         {soloist?.full_name ?? '—'}
       </td>
       <td className="py-3 px-4 text-sm text-[#94A3B8]">{song.version ?? '—'}</td>
+      <td className="max-w-[180px] py-3 px-4 text-xs text-[#94A3B8]">
+        {summarizeSongChanges({
+          playsLikeLastTime: song.plays_like_last_time,
+          changes: { newKey: song.change_new_key, newArrangement: song.change_new_arrangement, newIntro: song.change_new_intro, newVocalDivision: song.change_new_vocal_division, newMember: song.change_new_member },
+          changeNotes: song.change_notes,
+        })}
+      </td>
+      <td className="py-3 px-4 text-xs text-[#94A3B8]">
+        <span className="font-mono text-cyan-300">{song.readiness_index}</span>
+        <span className="block mt-0.5">{song.suggested_stage}</span>
+      </td>
       {isAdmin && (
         <td className="py-3 px-4">
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

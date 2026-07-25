@@ -95,6 +95,13 @@ interface EventSongDraft {
   soloistId: string
   version: string
   youtubeUrl: string
+  playsLikeLastTime: boolean
+  newKey: boolean
+  newArrangement: boolean
+  newIntro: boolean
+  newVocalDivision: boolean
+  newMember: boolean
+  changeNotes: string
 }
 
 interface EventFormModalProps {
@@ -134,6 +141,13 @@ function newSongDraft(): EventSongDraft {
     soloistId: '',
     version: '',
     youtubeUrl: '',
+    playsLikeLastTime: true,
+    newKey: false,
+    newArrangement: false,
+    newIntro: false,
+    newVocalDivision: false,
+    newMember: false,
+    changeNotes: '',
   }
 }
 
@@ -244,7 +258,7 @@ export function EventFormModal({
     ])
   }
 
-  function updateSongField(id: string, field: keyof EventSongDraft, value: string) {
+  function updateSongField(id: string, field: keyof EventSongDraft, value: string | boolean) {
     setSongs((prev) => prev.map((s) => s.id === id ? { ...s, [field]: value } : s))
   }
 
@@ -256,7 +270,7 @@ export function EventFormModal({
         supabase.from('event_members').select('profile_id, instrument').eq('event_id', event.id),
         supabase
           .from('setlist_songs')
-          .select('id, song_id, song_title, artist, key_note, moment, soloist_id, version, reference_link, order_index')
+          .select('id, song_id, song_title, artist, key_note, moment, soloist_id, version, reference_link, order_index, plays_like_last_time, change_new_key, change_new_arrangement, change_new_intro, change_new_vocal_division, change_new_member, change_notes')
           .eq('event_id', event.id)
           .order('order_index'),
       ])
@@ -275,6 +289,13 @@ export function EventFormModal({
             soloistId: row.soloist_id ?? '',
             version: row.version ?? '',
             youtubeUrl: row.reference_link ?? '',
+            playsLikeLastTime: row.plays_like_last_time,
+            newKey: row.change_new_key,
+            newArrangement: row.change_new_arrangement,
+            newIntro: row.change_new_intro,
+            newVocalDivision: row.change_new_vocal_division,
+            newMember: row.change_new_member,
+            changeNotes: row.change_notes ?? '',
           }))
         : [newSongDraft()])
     } catch (error) {
@@ -287,7 +308,6 @@ export function EventFormModal({
   async function handleOpenChange(val: boolean) {
     if (val && event) await loadExistingEvent()
     setOpen(val)
-    if (val && event) void loadExistingEvent()
     if (!val) {
       setStep(1)
       setSelectedMembers({})
@@ -336,6 +356,15 @@ export function EventFormModal({
           moment: s.moment || null,
           version: s.version || null,
           referenceLink: s.youtubeUrl || null,
+          playsLikeLastTime: s.playsLikeLastTime,
+          changes: {
+            newKey: s.newKey,
+            newArrangement: s.newArrangement,
+            newIntro: s.newIntro,
+            newVocalDivision: s.newVocalDivision,
+            newMember: s.newMember,
+          },
+          changeNotes: s.changeNotes.trim() || null,
         })),
       })
       toast.success(isEditing ? 'Evento atualizado com sucesso.' : 'Evento criado com sucesso.')
@@ -543,6 +572,31 @@ export function EventFormModal({
                             <select value={draft.soloistId} onChange={(event) => updateSongField(draft.id, 'soloistId', event.target.value)} className={inputSmClass}><option value="">Solista</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name}</option>)}</select>
                             <input value={draft.version} onChange={(event) => updateSongField(draft.id, 'version', event.target.value)} placeholder="Versão" className={inputSmClass} />
                             <input value={draft.youtubeUrl} onChange={(event) => updateSongField(draft.id, 'youtubeUrl', event.target.value)} type="url" placeholder="Link do YouTube" className={inputSmClass} />
+                          </div>
+                          <div className="space-y-2 border-t border-white/[0.06] pt-3">
+                            <p className="text-xs font-medium text-white">Vai tocar igual à última vez?</p>
+                            <div className="flex gap-4 text-xs text-[#94A3B8]">
+                              {[{ label: 'Sim', value: true }, { label: 'Não', value: false }].map((option) => (
+                                <label key={option.label} className="flex items-center gap-1.5">
+                                  <input type="radio" name={`same-${draft.id}`} checked={draft.playsLikeLastTime === option.value} onChange={() => updateSongField(draft.id, 'playsLikeLastTime', option.value)} className="accent-brand" />
+                                  {option.label}
+                                </label>
+                              ))}
+                            </div>
+                            {!draft.playsLikeLastTime && (
+                              <div className="grid grid-cols-2 gap-2 rounded-card bg-white/[0.03] p-2">
+                                {([
+                                  ['newKey', 'Novo tom'], ['newArrangement', 'Novo arranjo'],
+                                  ['newIntro', 'Nova introdução'], ['newVocalDivision', 'Nova divisão vocal'],
+                                  ['newMember', 'Novo integrante'],
+                                ] as const).map(([field, label]) => (
+                                  <label key={field} className="flex items-center gap-1.5 text-[11px] text-[#94A3B8]">
+                                    <input type="checkbox" checked={draft[field]} onChange={(event) => updateSongField(draft.id, field, event.target.checked)} className="accent-brand" /> {label}
+                                  </label>
+                                ))}
+                                <textarea value={draft.changeNotes} onChange={(event) => updateSongField(draft.id, 'changeNotes', event.target.value)} placeholder="Observação livre" rows={2} className={`col-span-2 ${inputSmClass}`} />
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
