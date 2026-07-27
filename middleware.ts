@@ -9,11 +9,16 @@ function isPublicInscricaoApi(pathname: string) {
   return /^\/api\/inscricoes\/[^/]+\/(status|pix)$/.test(pathname)
 }
 
+function isPublicAutomationWebhook(pathname: string) {
+  return /^\/api\/automations\/webhooks\/(?:test\/[^/]+|[^/]+)$/.test(pathname)
+}
+
 function isPublicRoute(pathname: string) {
   return (
     PUBLIC_PAGE_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
     AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
     isPublicInscricaoApi(pathname) ||
+    isPublicAutomationWebhook(pathname) ||
     pathname === '/api/mercado-pago/webhook'
   )
 }
