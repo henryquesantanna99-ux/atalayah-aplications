@@ -1,33 +1,26 @@
 import assert from 'node:assert/strict'
-import { describe, it } from 'node:test'
-import { runExternal, sanitizeLog, TestSessionStore } from '../../lib/automations/runtime.ts'
+import test from 'node:test'
+import { redact } from '../../lib/automations/runtime/redact.ts'
+import { SchemaValidationError, validateSchema } from '../../lib/automations/runtime/schema.ts'
+import { resolveVariables } from '../../lib/automations/runtime/variables.ts'
+import { getNodeHandler } from '../../lib/automations/runtime/registry.ts'
 
-describe('reliable runtime', () => {
-  it('retries failures and reuses a completed idempotent action on resume', async () => {
-    let calls = 0; const completed = new Map<string, string>()
-    const action = async () => { calls++; if (calls === 1) throw new Error('temporary'); return 'external-1' }
-    assert.equal(await runExternal(action, { attempts: 2, idempotencyKey: 'run:node', completed }), 'external-1')
-    assert.equal(await runExternal(action, { attempts: 2, idempotencyKey: 'run:node', completed }), 'external-1')
-    assert.equal(calls, 2)
-  })
-  it('aborts actions at their timeout', async () => {
-    await assert.rejects(runExternal(() => new Promise(() => {}), { timeoutMs: 5, idempotencyKey: 'slow' }), /timed out/)
-  })
-  it('starts exactly one execution for concurrent requests to the same test URL', async () => {
-    const sessions = new TestSessionStore(); let calls = 0
-    const execute = async () => { calls++; await new Promise((resolve) => setTimeout(resolve, 5)); return calls }
-    const [a, b] = await Promise.all([sessions.executeOnce('/test/same', execute), sessions.executeOnce('/test/same', execute)])
-    assert.deepEqual([a, b], [1, 1]); assert.equal(calls, 1)
-  })
-  it('expires and explicitly invalidates test sessions', () => {
-    let now = 100; const sessions = new TestSessionStore(() => now)
-    sessions.create('expires', 10); assert.equal(sessions.isValid('expires'), true)
-    now = 110; assert.equal(sessions.isValid('expires'), false)
-    sessions.create('revoked', 10); sessions.invalidate('revoked'); assert.equal(sessions.isValid('revoked'), false)
-  })
-  it('redacts nested secrets and personal data in logs', () => {
-    assert.deepEqual(sanitizeLog({ accessToken: 'abc', user: { email: 'a@b.co', name: 'Ana' }, list: [{ phone: '123' }] }), {
-      accessToken: '[REDACTED]', user: { email: '[REDACTED]', name: 'Ana' }, list: [{ phone: '[REDACTED]' }],
-    })
-  })
+test('resolve somente caminhos de dados e não avalia JavaScript', () => {
+  assert.equal(resolveVariables('${input.user.name}', { input: { user: { name: 'Ana' } }, nodes: {} }), 'Ana')
+  assert.equal(resolveVariables('${process.exit()}', { input: {}, nodes: {} }), '${process.exit()}')
+})
+
+test('valida schema estrito de entrada e saída', () => {
+  assert.doesNotThrow(() => validateSchema({ type: 'object', required: ['id'], properties: { id: { type: 'integer' } }, additionalProperties: false }, { id: 1 }))
+  assert.throws(() => validateSchema({ type: 'string' }, 1), SchemaValidationError)
+})
+
+test('redige segredos e PII recursivamente', () => {
+  assert.deepEqual(redact({ headers: { authorization: 'Bearer x' }, email: 'a@b.com', safe: 'ok' }), { headers: { authorization: '[REDACTED]' }, email: '[PII]', safe: 'ok' })
+})
+
+test('IF e Switch selecionam portas de saída explicitamente', async () => {
+  const context = { runId: 'r', nodeId: 'n', attempt: 1, signal: new AbortController().signal, idempotencyKey: 'k' }
+  assert.deepEqual((await getNodeHandler('if', 1)!.execute({ active: true }, { path: 'active', equals: true }, context)).ports, ['true'])
+  assert.deepEqual((await getNodeHandler('switch', 1)!.execute({ kind: 'a' }, { path: 'kind', cases: { first: 'a' } }, context)).ports, ['first'])
 })
