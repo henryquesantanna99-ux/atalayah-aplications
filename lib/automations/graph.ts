@@ -1,73 +1,84 @@
-export const CURRENT_GRAPH_SCHEMA_VERSION = 2
+/** Serializable values accepted in workflow node configuration. */
+export type AutomationValue = string | number | boolean | null | AutomationValue[] | { [key: string]: AutomationValue }
 
-export type GraphNode = { id: string; type: string; config?: Record<string, unknown> }
-export type GraphEdge = { from: string; to: string }
-export type AutomationGraph = { schemaVersion: number; nodes: GraphNode[]; edges: GraphEdge[] }
-
-export function migrateGraph(input: unknown): AutomationGraph {
-  if (!input || typeof input !== 'object') throw new Error('Invalid graph')
-  const source = structuredClone(input) as Record<string, unknown>
-  const version = source.schemaVersion ?? source.version ?? 1
-  if (typeof version !== 'number' || version < 1 || version > CURRENT_GRAPH_SCHEMA_VERSION) {
-    throw new Error(`Unsupported graph schema version: ${String(version)}`)
-  }
-  const nodes = source.nodes
-  const legacyEdges = source.connections
-  const edges = source.edges ?? (Array.isArray(legacyEdges)
-    ? legacyEdges.map((edge) => ({ from: (edge as any).source, to: (edge as any).target }))
-    : [])
-  const graph = { schemaVersion: CURRENT_GRAPH_SCHEMA_VERSION, nodes, edges }
-  validateGraph(graph)
-  return graph as AutomationGraph
+export type AutomationNode = {
+  id: string
+  type: string
+  config: Record<string, AutomationValue>
+  credentialId?: string
 }
 
-export function validateGraph(graph: unknown): asserts graph is AutomationGraph {
-  if (!graph || typeof graph !== 'object') throw new Error('Invalid graph')
-  const value = graph as Partial<AutomationGraph>
-  if (value.schemaVersion !== CURRENT_GRAPH_SCHEMA_VERSION || !Array.isArray(value.nodes) || !Array.isArray(value.edges)) {
-    throw new Error('Invalid graph schema')
-  }
-  const ids = new Set<string>()
-  for (const node of value.nodes) {
-    if (!node || typeof node.id !== 'string' || !node.id || typeof node.type !== 'string' || ids.has(node.id)) {
-      throw new Error('Invalid or duplicate node')
-    }
-    ids.add(node.id)
-  }
-  const adjacency = new Map(Array.from(ids).map((id) => [id, [] as string[]]))
-  for (const edge of value.edges) {
-    if (!edge || !ids.has(edge.from) || !ids.has(edge.to)) throw new Error('Edge references unknown node')
-    adjacency.get(edge.from)!.push(edge.to)
-  }
-  const visiting = new Set<string>(); const visited = new Set<string>()
-  const visit = (id: string) => {
-    if (visiting.has(id)) throw new Error('Invalid cycle detected')
-    if (visited.has(id)) return
-    visiting.add(id); adjacency.get(id)!.forEach(visit); visiting.delete(id); visited.add(id)
-  }
-  ids.forEach(visit)
+export type AutomationEdge = {
+  source: string
+  target: string
 }
 
-export function executionPlan(graph: AutomationGraph, starts = ['start']) {
-  validateGraph(graph)
-  const reachable = new Set<string>(); const incoming = new Map<string, number>()
-  graph.nodes.forEach(({ id }) => incoming.set(id, 0))
-  graph.edges.forEach(({ to }) => incoming.set(to, incoming.get(to)! + 1))
-  const queue = starts.filter((id) => incoming.has(id))
-  while (queue.length) {
-    const id = queue.shift()!
-    if (reachable.has(id)) continue
-    reachable.add(id)
-    graph.edges.filter((edge) => edge.from === id).forEach((edge) => queue.push(edge.to))
+export type AutomationGraph = {
+  nodes: AutomationNode[]
+  edges: AutomationEdge[]
+}
+
+/**
+ * Validates data received by the workflow editor without using `any`. Keeping
+ * the input as `unknown` forces callers to narrow untrusted JSON before use.
+ */
+export function parseAutomationGraph(input: unknown): AutomationGraph {
+  if (!isRecord(input) || !Array.isArray(input.nodes) || !Array.isArray(input.edges)) {
+    throw new Error('O workflow deve conter listas de nós e conexões.')
   }
-  const pending = new Map(incoming); const ordered: string[] = []
-  const ready = Array.from(reachable).filter((id) => graph.edges.every((e) => e.to !== id || !reachable.has(e.from)))
-  while (ready.length) {
-    const id = ready.shift()!; ordered.push(id)
-    for (const edge of graph.edges.filter((e) => e.from === id && reachable.has(e.to))) {
-      pending.set(edge.to, pending.get(edge.to)! - 1)
-      if (pending.get(edge.to) === 0) ready.push(edge.to)
+
+  const nodes = input.nodes.map(parseNode)
+  const edges = input.edges.map(parseEdge)
+  const nodeIds = new Set(nodes.map((node) => node.id))
+  if (nodeIds.size !== nodes.length) throw new Error('O workflow contém IDs de nós duplicados.')
+
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) {
+      throw new Error('Uma conexão aponta para um nó inexistente.')
     }
+    if (edge.source === edge.target) throw new Error('Um nó não pode conectar-se diretamente a si mesmo.')
   }
-  return { ordered, unreachable: graph.nodes.map((n) => n.id).filter((id) => !reachable.has(id)) }
+
+  return { nodes, edges }
+}
+
+function parseNode(input: unknown): AutomationNode {
+  if (!isRecord(input) || !isNonEmptyString(input.id) || !isNonEmptyString(input.type)) {
+    throw new Error('Nó de automação inválido.')
+  }
+  if (!isRecord(input.config) || !isAutomationValue(input.config)) {
+    throw new Error(`Configuração inválida no nó ${input.id}.`)
+  }
+  if (input.credentialId !== undefined && !isNonEmptyString(input.credentialId)) {
+    throw new Error(`ID de credencial inválido no nó ${input.id}.`)
+  }
+  return {
+    id: input.id,
+    type: input.type,
+    config: input.config,
+    ...(input.credentialId === undefined ? {} : { credentialId: input.credentialId }),
+  }
+}
+
+function parseEdge(input: unknown): AutomationEdge {
+  if (!isRecord(input) || !isNonEmptyString(input.source) || !isNonEmptyString(input.target)) {
+    throw new Error('Conexão de automação inválida.')
+  }
+  return { source: input.source, target: input.target }
+}
+
+function isAutomationValue(input: unknown): input is AutomationValue {
+  if (input === null || ['string', 'number', 'boolean'].includes(typeof input)) return true
+  if (Array.isArray(input)) return input.every(isAutomationValue)
+  return isRecord(input) && Object.values(input).every(isAutomationValue)
+}
+
+function isRecord(input: unknown): input is Record<string, unknown> {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return false
+  const prototype = Object.getPrototypeOf(input) as object | null
+  return prototype === Object.prototype || prototype === null
+}
+
+function isNonEmptyString(input: unknown): input is string {
+  return typeof input === 'string' && input.trim().length > 0
 }
