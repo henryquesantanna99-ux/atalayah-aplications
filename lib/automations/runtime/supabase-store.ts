@@ -1,11 +1,14 @@
 import type { AttemptRecord, Json, NodeDefinition, NodeResult, RunSnapshot, RuntimeStore } from './types'
+import type { AutomationClient } from '../database'
 
 export class SupabaseRuntimeStore implements RuntimeStore {
-  constructor(private readonly client: any) {}
+  constructor(private readonly client: AutomationClient) {}
   async loadRun(runId: string): Promise<RunSnapshot> {
-    const { data, error } = await this.client.from('automation_runs').select('id,status,input,workflow_version_id,automation_workflow_versions!inner(definition,published_at)').eq('id', runId).single()
-    if (error || !data?.automation_workflow_versions?.published_at) throw error ?? new Error('Versão publicada não encontrada')
-    return { id: data.id, status: data.status, input: data.input, workflowVersionId: data.workflow_version_id, definition: data.automation_workflow_versions.definition }
+    const { data: run, error: runError } = await this.client.from('automation_runs').select('id,status,input,workflow_version_id').eq('id', runId).single()
+    if (runError) throw runError
+    const { data: version, error: versionError } = await this.client.from('automation_workflow_versions').select('definition,published_at').eq('id', run.workflow_version_id).single()
+    if (versionError || !version?.published_at) throw versionError ?? new Error('Versão publicada não encontrada')
+    return { id: run.id, status: run.status, input: run.input, workflowVersionId: run.workflow_version_id, definition: version.definition as unknown as RunSnapshot['definition'] }
   }
   async startRun(runId: string) { const { error } = await this.client.from('automation_runs').update({ status: 'running', started_at: new Date().toISOString() }).eq('id', runId).in('status', ['queued', 'running']); if (error) throw error }
   async finishRun(runId: string, status: 'succeeded' | 'failed', output?: Json) { const { error } = await this.client.from('automation_runs').update({ status, output, finished_at: new Date().toISOString() }).eq('id', runId); if (error) throw error; await this.emit(runId, `run.${status}`, {}) }

@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { AutomationRuntime } from '@/lib/automations/runtime'
+import type { AutomationClient } from '@/lib/automations/database'
+import { AutomationRuntime } from '@/lib/automations/runtime/executor'
 import { SupabaseAutomationQueue } from '@/lib/automations/runtime/queue'
 import { SupabaseRuntimeStore } from '@/lib/automations/runtime/supabase-store'
 
@@ -13,7 +14,7 @@ function validWorker(request: Request) {
 
 export async function POST(request: Request) {
   if (!validWorker(request)) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  const client = createAdminClient() as any
+  const client = createAdminClient() as unknown as AutomationClient
   const queue = new SupabaseAutomationQueue(client)
   const job = await queue.claim(crypto.randomUUID())
   if (!job) return new Response(null, { status: 204 })
