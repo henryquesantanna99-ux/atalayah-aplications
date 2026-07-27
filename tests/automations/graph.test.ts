@@ -14,6 +14,7 @@ describe('schema and topology', () => {
   it('rejects malformed and future schemas', () => {
     assert.throws(() => migrateGraph({ schemaVersion: 99, nodes: [], edges: [] }), /Unsupported/)
     assert.throws(() => validateGraph({ schemaVersion: 2, nodes: [{ id: 'x', type: 'a' }], edges: [{ from: 'x', to: 'missing' }] }), /unknown/)
+    assert.throws(() => migrateGraph({ version: 1, nodes: [], connections: [{ source: 'x' }] }), /Invalid legacy edge/)
   })
 
   it('plans forks and merge once and reports unreachable nodes', () => {

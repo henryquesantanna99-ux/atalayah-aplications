@@ -4,6 +4,15 @@ export type GraphNode = { id: string; type: string; config?: Record<string, unkn
 export type GraphEdge = { from: string; to: string }
 export type AutomationGraph = { schemaVersion: number; nodes: GraphNode[]; edges: GraphEdge[] }
 
+function migrateLegacyEdge(edge: unknown): GraphEdge {
+  if (!edge || typeof edge !== 'object') throw new Error('Invalid legacy edge')
+  const value = edge as Record<string, unknown>
+  if (typeof value.source !== 'string' || typeof value.target !== 'string') {
+    throw new Error('Invalid legacy edge')
+  }
+  return { from: value.source, to: value.target }
+}
+
 export function migrateGraph(input: unknown): AutomationGraph {
   if (!input || typeof input !== 'object') throw new Error('Invalid graph')
   const source = structuredClone(input) as Record<string, unknown>
@@ -14,7 +23,7 @@ export function migrateGraph(input: unknown): AutomationGraph {
   const nodes = source.nodes
   const legacyEdges = source.connections
   const edges = source.edges ?? (Array.isArray(legacyEdges)
-    ? legacyEdges.map((edge) => ({ from: (edge as any).source, to: (edge as any).target }))
+    ? legacyEdges.map(migrateLegacyEdge)
     : [])
   const graph = { schemaVersion: CURRENT_GRAPH_SCHEMA_VERSION, nodes, edges }
   validateGraph(graph)
