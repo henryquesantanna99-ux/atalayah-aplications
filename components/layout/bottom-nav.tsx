@@ -14,6 +14,7 @@ import {
   BookOpen,
   Headphones,
   Church,
+  BriefcaseBusiness,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: '/chat', icon: MessageSquare, label: 'Chat' },
   { href: '/laia', icon: Sparkles, label: 'Laia' },
   { href: '/time', icon: Users, label: 'Time' },
+  { href: '/gestao-comercial', icon: BriefcaseBusiness, label: 'Comercial' },
   { href: '/comunhao', icon: BookOpen, label: 'Comunhão' },
 ]
 

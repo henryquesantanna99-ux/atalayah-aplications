@@ -13,6 +13,7 @@ import {
   Headphones,
   MessageSquare,
   Sparkles,
+  BriefcaseBusiness,
   Church,
   LogOut,
 } from 'lucide-react'
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: '/seu-ministerio', icon: Church, label: 'Seu Ministério' },
   { href: '/inscricoes', icon: ClipboardList, label: 'Inscrições' },
   { href: '/time', icon: Users, label: 'Time' },
+  { href: '/gestao-comercial', icon: BriefcaseBusiness, label: 'Gestão Comercial' },
   { href: '/agenda', icon: CalendarDays, label: 'Agenda' },
   { href: '/estudo', icon: Headphones, label: 'Estudo' },
   { href: '/comunhao', icon: BookOpen, label: 'Comunhão' },
@@ -89,9 +91,9 @@ export function Sidebar() {
       {/* User section */}
       <div className="px-3 pb-4 border-t border-white/[0.06] pt-4">
         <Link
-          href={profile.role === 'admin' ? '/gestao-comercial' : '#'}
-          aria-label={profile.role === 'admin' ? 'Abrir gestão comercial' : 'Perfil do usuário'}
-          className={`flex items-center gap-3 px-2 mb-3 rounded-card py-1.5 -mx-1 transition-colors ${profile.role === 'admin' ? 'hover:bg-white/[0.05] cursor-pointer' : 'cursor-default'}`}
+          href="#"
+          aria-label="Perfil do usuário"
+          className={`flex items-center gap-3 px-2 mb-3 rounded-card py-1.5 -mx-1 transition-colors cursor-default`}
         >
           <Avatar className="w-8 h-8">
             <AvatarImage src={profile.avatar_url ?? undefined} alt={profile.full_name ?? 'Usuário'} />
