@@ -37,6 +37,13 @@
     @apply antialiased;
   }
 
+  html,
+  body,
+  #main-content {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   body {
     @apply bg-background text-white font-sans;
     background-color: #000000;
@@ -92,6 +99,9 @@
 
 /* The CRM toolbar stays fixed while the board owns both scroll axes. */
 .commercial-kanban-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
   scrollbar-gutter: stable both-edges;
   touch-action: pan-x pan-y;
 }

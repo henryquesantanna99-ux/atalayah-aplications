@@ -49,7 +49,7 @@ export default async function AppLayout({
           {/* Main content area (offset for sidebar on desktop) */}
           <main
             id="main-content"
-            className="flex-1 lg:ml-[240px] min-h-screen pb-20 lg:pb-0"
+            className="flex-1 min-w-0 overflow-hidden lg:ml-[240px] min-h-screen pb-20 lg:pb-0"
           >
             {children}
           </main>
