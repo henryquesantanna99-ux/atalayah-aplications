@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { getLatestMinistryProfile, requireWorshipAdmin, type AdminResponse, type WorshipSuggestionRow } from './shared'
 
-type SpiritualSummaryRow = { id: string; run_id: string; analysis_date: string; quantification: Record<string, unknown>; segmentation: unknown[]; associations: unknown[]; evolution: Record<string, unknown>; discernment: string[]; recommendations: string[]; charts_payload: Record<string, unknown>; created_at: string }
+type SpiritualSummaryRow = { id: string; run_id: string; analysis_date: string; quantification: Record<string, unknown>; segmentation: unknown[]; associations: unknown[]; correlations: unknown[]; interpretation: unknown[]; actions: unknown[]; ministry_context: Record<string, unknown>; evolution: Record<string, unknown>; discernment: string[]; recommendations: string[]; charts_payload: Record<string, unknown>; created_at: string }
 
 type CatalogRow = {
   id: string

@@ -8,7 +8,16 @@ export type SpiritualClassification = {
   convictions: string[]
   evidence: string[]
   segments: Record<string, string>
+  personName?: string
+  lyricsStatus?: 'pendente' | 'confirmada' | 'nao_confirmada'
+  thematicFindings: ThematicFinding[]
 }
+
+export type ThemeDimension = 'espiritual' | 'relacional' | 'material' | 'outra'
+export type ThemePolarity = 'bem' | 'mal' | 'neutro'
+export type ThematicFinding = { theme: string; dimension: ThemeDimension; polarity: ThemePolarity; evidence: string; evidenceSource: 'letra' | 'resposta' | 'metadado' }
+export type DimensionMetric = { dimension: ThemeDimension; polarity: ThemePolarity; count: number; percentage: number }
+export type CorrelationFinding = { segment: string; value: string; dimension: ThemeDimension; polarity: ThemePolarity; segmentPercentage: number; baselinePercentage: number; difference: number; sampleSize: number; relevant: boolean }
 
 export type SpiritualSummary = {
   quantification: Record<'themes' | 'needs' | 'emotions' | 'nextSteps', MetricCount[]>
@@ -17,6 +26,8 @@ export type SpiritualSummary = {
   evolution: SpiritualEvolution
   discernment: string[]
   recommendations: string[]
+  dimensionQuantification: DimensionMetric[]
+  correlations: CorrelationFinding[]
 }
 
 export type MetricCount = { label: string; count: number; percentage: number }
@@ -41,6 +52,12 @@ type SuggestionLike = {
   conversion_time?: string | null
   participation_time?: string | null
   lyrics_plain?: string | null
+  letra_texto?: string | null
+  letra_status?: 'pendente' | 'confirmada' | 'nao_confirmada' | null
+  name?: string | null
+  gender?: string | null
+  state?: string | null
+  country?: string | null
 }
 
 const themeKeywords: Array<[string, string[]]> = [
@@ -96,16 +113,24 @@ export function classifySuggestionExpression(suggestion: SuggestionLike): Spirit
     suggestion.artist,
     suggestion.reason,
     suggestion.spiritual_area,
-    suggestion.lyrics_plain,
+    suggestion.letra_status === 'confirmada' ? suggestion.letra_texto || suggestion.lyrics_plain : null,
   ].filter(Boolean).join(' '))
 
   const nextStep = suggestion.next_step_other || suggestion.next_step || 'próximo passo não informado'
   const hasMemberContext = Boolean(memberContext)
 
+  const themes = matchKeywords(thematicContext, themeKeywords, suggestion.spiritual_area || 'tema a discernir coletivamente')
+  const evidenceText = suggestion.reason || suggestion.spiritual_experience_note || (suggestion.letra_status === 'confirmada' ? suggestion.letra_texto || suggestion.lyrics_plain : null) || `${suggestion.song_title}${suggestion.artist ? ` — ${suggestion.artist}` : ''}`
+  const thematicFindings = themes.map((theme): ThematicFinding => {
+    const normalized = normalizeText(`${theme} ${evidenceText}`)
+    const dimension: ThemeDimension = /deus|cristo|fe|sant|adora|altar|espiritual/.test(normalized) ? 'espiritual' : /famil|amig|relacion|perdao|reconcili|amor/.test(normalized) ? 'relacional' : /trabalho|dinheiro|bem|sonho|futuro|pratic/.test(normalized) ? 'material' : 'outra'
+    const polarity: ThemePolarity = /dor|medo|pecado|quebrant|arrepend|perda|confront/.test(normalized) ? 'mal' : /esperanca|cura|consolo|gratidao|amor|fe|servir/.test(normalized) ? 'bem' : 'neutro'
+    return { theme, dimension, polarity, evidence: String(evidenceText).slice(0, 220), evidenceSource: suggestion.reason || suggestion.spiritual_experience_note ? 'resposta' : suggestion.letra_status === 'confirmada' ? 'letra' : 'metadado' }
+  })
   return {
     suggestionId: suggestion.id,
     songTitle: suggestion.song_title,
-    themes: matchKeywords(thematicContext, themeKeywords, suggestion.spiritual_area || 'tema a discernir coletivamente'),
+    themes,
     needs: hasMemberContext ? matchKeywords(memberContext, needKeywords, 'necessidade não explicitada nas respostas') : ['contexto do membro não informado'],
     emotions: hasMemberContext ? matchKeywords(memberContext, emotionKeywords, suggestion.spiritual_experience_note || 'emoção não informada') : ['contexto do membro não informado'],
     nextSteps: unique([nextStep]),
@@ -118,8 +143,42 @@ export function classifySuggestionExpression(suggestion: SuggestionLike): Spirit
       regiao: suggestion.region || 'Não informada',
       tempoConversao: suggestion.conversion_time || 'Não informado',
       tempoParticipacao: suggestion.participation_time || 'Não informado',
+      genero: suggestion.gender || 'Não informado',
+      estado: suggestion.state || 'Não informado',
+      pais: suggestion.country || 'Não informado',
     },
+    personName: suggestion.name || 'Participante',
+    lyricsStatus: suggestion.letra_status || (suggestion.lyrics_plain ? 'confirmada' : 'nao_confirmada'),
+    thematicFindings,
   }
+}
+
+export function quantifyDimensions(classifications: SpiritualClassification[]): DimensionMetric[] {
+  const findings = classifications.flatMap((item) => item.thematicFindings)
+  const counts = new Map<string, number>()
+  findings.forEach((item) => counts.set(`${item.dimension}:${item.polarity}`, (counts.get(`${item.dimension}:${item.polarity}`) ?? 0) + 1))
+  return Array.from(counts.entries()).map(([key, count]) => { const [dimension, polarity] = key.split(':') as [ThemeDimension, ThemePolarity]; return { dimension, polarity, count, percentage: findings.length ? Math.round(count / findings.length * 100) : 0 } }).sort((a, b) => b.count - a.count)
+}
+
+export function detectCorrelations(classifications: SpiritualClassification[], minSample = 3, minDifference = 15): CorrelationFinding[] {
+  const baseline = quantifyDimensions(classifications)
+  const dimensions = new Set(classifications.flatMap((item) => item.thematicFindings.map((finding) => `${finding.dimension}:${finding.polarity}`)))
+  const output: CorrelationFinding[] = []
+  ;['faixaEtaria', 'genero', 'regiao', 'estado', 'pais'].forEach((segment) => {
+    const values = new Set(classifications.map((item) => item.segments[segment] || 'Não informado'))
+    values.forEach((value) => {
+      const group = classifications.filter((item) => (item.segments[segment] || 'Não informado') === value)
+      const metrics = quantifyDimensions(group)
+      dimensions.forEach((key) => {
+        const [dimension, polarity] = key.split(':') as [ThemeDimension, ThemePolarity]
+        const segmentPercentage = metrics.find((item) => item.dimension === dimension && item.polarity === polarity)?.percentage ?? 0
+        const baselinePercentage = baseline.find((item) => item.dimension === dimension && item.polarity === polarity)?.percentage ?? 0
+        const difference = segmentPercentage - baselinePercentage
+        output.push({ segment, value, dimension, polarity, segmentPercentage, baselinePercentage, difference, sampleSize: group.length, relevant: group.length >= minSample && Math.abs(difference) >= minDifference })
+      })
+    })
+  })
+  return output.sort((a, b) => Number(b.relevant) - Number(a.relevant) || Math.abs(b.difference) - Math.abs(a.difference))
 }
 
 function countMetrics(values: string[][], total: number): MetricCount[] {
@@ -214,5 +273,7 @@ export function summarizeCollectivePatterns(classifications: SpiritualClassifica
       'Avaliar repertório como uma resposta possível, sem transformar popularidade em decisão automática.',
       'Observar segmentos com recorrências relevantes para direcionar discipulado e acompanhamento coletivo.',
     ],
+    dimensionQuantification: quantifyDimensions(classifications),
+    correlations: detectCorrelations(classifications),
   }
 }

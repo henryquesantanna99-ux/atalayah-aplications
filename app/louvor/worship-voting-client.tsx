@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useId, useMemo, useState, useTransition } from 'react'
-import { ArrowLeft, ArrowRight, Check, ExternalLink, HeartHandshake, Loader2, LogIn, Music2, Search, Send, UserPlus, Vote } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ExternalLink, HeartHandshake, Loader2, LogIn, Music2, RefreshCw, Search, Send, UserPlus, Vote } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,10 +46,10 @@ const heartExperienceOptions = ['Senti consolo de Deus', 'Senti direção para u
 const conversionTimes = ['Menos de 1 ano', '1 a 3 anos', '4 a 10 anos', 'Mais de 10 anos', 'Prefiro não responder']
 const participationTimes = ['Estou visitando', 'Menos de 6 meses', '6 meses a 2 anos', '3 a 5 anos', 'Mais de 5 anos', 'Prefiro não responder']
 const nextSteps = ['Orar mais sobre isso', 'Conversar com alguém da liderança', 'Buscar reconciliação com alguém', 'Voltar a congregar com mais constância', 'Servir em alguma área', 'Estudar mais a Palavra', 'Pedir ajuda pastoral', 'Ainda não sei', 'Outro']
-const wizardSteps = ['Quem indica', 'Escolha da música', 'Confirmação', 'Leitura espiritual', 'Revisão']
+const wizardSteps = ['Quem indica', 'Escolha da música', 'Confirmação', 'Confirmar letra', 'Leitura espiritual', 'Revisão']
 
 const emptySuggestion = {
-  nome: '', tribo: '', telefone: '', faixaEtaria: '', ministerio: '', regiao: '', tempoConversao: '', tempoParticipacao: '', musica: '', artista: '', categoriaSugerida: '', tipoLouvor: '', motivo: '', spiritual_area: '', spiritual_area_other: '', spiritual_experience_note: '', next_step: '', next_step_other: '', youtube_video_id: '', youtube_title: '', youtube_channel: '', youtube_thumbnail: '', youtube_duration: '', youtube_url: '',
+  nome: '', tribo: '', telefone: '', faixaEtaria: '', ministerio: '', regiao: '', tempoConversao: '', tempoParticipacao: '', musica: '', artista: '', categoriaSugerida: '', tipoLouvor: '', motivo: '', spiritual_area: '', spiritual_area_other: '', spiritual_experience_note: '', next_step: '', next_step_other: '', youtube_video_id: '', youtube_title: '', youtube_channel: '', youtube_thumbnail: '', youtube_duration: '', youtube_url: '', lyrics_session_id: '',
 }
 
 export function WorshipVotingClient({ songs }: { songs: Song[] }) {
@@ -76,7 +76,8 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
     if (step === 0) return Boolean(suggestion.nome.trim() && suggestion.tribo.trim() && suggestion.telefone.trim())
     if (step === 1) return Boolean(suggestion.youtube_video_id || suggestion.musica.trim())
     if (step === 2) return Boolean(suggestion.musica.trim())
-    if (step === 3) return Boolean(suggestion.motivo.trim() && suggestion.spiritual_area.trim() && suggestion.next_step)
+    if (step === 3) return false
+    if (step === 4) return Boolean(suggestion.motivo.trim() && suggestion.spiritual_area.trim() && suggestion.next_step)
     return true
   }, [step, suggestion])
 
@@ -164,10 +165,11 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
         {step === 0 && <WhoSuggestsStep suggestion={suggestion} onSuggestionChange={setSuggestion} />}
         {step === 1 && <SongSearchStep suggestion={suggestion} onSuggestionChange={setSuggestion} results={youtubeResults} pendingSelection={pendingYoutubeSelection} isSearching={isSearching} searchError={youtubeSearchError} onSelect={selectYoutube} onConfirm={confirmYoutubeSelection} onCancel={() => setPendingYoutubeSelection(null)} />}
         {step === 2 && <div className="space-y-4"><div className="rounded-2xl border border-brand/30 bg-brand/10 p-4"><p className="text-sm text-brand">Música selecionada</p><h3 className="mt-2 text-xl font-bold text-white">{suggestion.musica || 'Informe a música manualmente'}</h3><p className="text-[#CBD5E1]">{suggestion.artista || 'Artista não informado'}</p>{suggestion.youtube_url && <a href={suggestion.youtube_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm text-brand"><ExternalLink className="h-4 w-4" />Abrir referência</a>}</div><div className="grid gap-4 sm:grid-cols-2"><SelectField label="Categoria sugerida" value={suggestion.categoriaSugerida} options={categories} onChange={(categoriaSugerida) => setSuggestion({ ...suggestion, categoriaSugerida })} /><SelectField label="Expressa mais" value={suggestion.tipoLouvor} options={worshipTypes} onChange={(tipoLouvor) => setSuggestion({ ...suggestion, tipoLouvor })} /></div></div>}
-        {step === 3 && <SpiritualReadingStep suggestion={suggestion} onSuggestionChange={setSuggestion} />}
-        {step === 4 && <Review suggestion={suggestion} />}
+        {step === 3 && <LyricsConfirmationStep suggestion={suggestion} onSession={(lyrics_session_id) => setSuggestion((current) => ({ ...current, lyrics_session_id }))} onContinue={() => setStep(4)} onBack={() => setStep(2)} />}
+        {step === 4 && <SpiritualReadingStep suggestion={suggestion} onSuggestionChange={setSuggestion} />}
+        {step === 5 && <Review suggestion={suggestion} />}
       </div>
-      <div className="sticky bottom-3 z-10 mt-6 flex flex-col gap-3 rounded-2xl border border-white/10 bg-navy-900/95 p-3 shadow-2xl shadow-black/40 backdrop-blur sm:static sm:flex-row sm:justify-between sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none"><Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep((current) => Math.max(0, current - 1))} className="h-12 border-white/10 bg-transparent text-white hover:bg-white/10 sm:h-10"><ArrowLeft className="h-4 w-4" />Voltar etapa</Button>{step < 4 ? <Button type="button" disabled={!canAdvance} onClick={() => setStep((current) => Math.min(4, current + 1))} className="h-12 bg-brand hover:bg-brand/90 sm:h-10">Avançar<ArrowRight className="h-4 w-4" /></Button> : <Button type="button" disabled={isPending} onClick={submitSuggestion} className="h-12 bg-brand hover:bg-brand/90 sm:h-10"><Send className="h-4 w-4" />{isPending ? 'Enviando...' : 'Enviar indicação'}</Button>}</div>
+      <div className="sticky bottom-3 z-10 mt-6 flex flex-col gap-3 rounded-2xl border border-white/10 bg-navy-900/95 p-3 shadow-2xl shadow-black/40 backdrop-blur sm:static sm:flex-row sm:justify-between sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none"><Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep((current) => Math.max(0, current - 1))} className="h-12 border-white/10 bg-transparent text-white hover:bg-white/10 sm:h-10"><ArrowLeft className="h-4 w-4" />Voltar etapa</Button>{step < 5 ? <Button type="button" disabled={!canAdvance} onClick={() => setStep((current) => Math.min(5, current + 1))} className="h-12 bg-brand hover:bg-brand/90 sm:h-10">Avançar<ArrowRight className="h-4 w-4" /></Button> : <Button type="button" disabled={isPending} onClick={submitSuggestion} className="h-12 bg-brand hover:bg-brand/90 sm:h-10"><Send className="h-4 w-4" />{isPending ? 'Enviando...' : 'Enviar indicação'}</Button>}</div>
     </section>
   }
 
@@ -176,6 +178,52 @@ export function WorshipVotingClient({ songs }: { songs: Song[] }) {
   }
 
   return <section className="mx-auto max-w-5xl space-y-6"><MemberLoginBar /><div className="rounded-3xl border border-white/[0.08] bg-gradient-to-br from-navy-900 to-black p-6 sm:p-8"><Badge className="bg-brand/15 text-brand border-brand/20 hover:bg-brand/15">Termômetro da igreja</Badge><h1 className="mt-4 text-3xl font-bold text-white sm:text-4xl">Indicação e Votação de Louvor</h1><p className="mt-4 max-w-3xl text-[#CBD5E1]">As indicações passam por busca de letra, metadados, análise temática, análise musical e discernimento da liderança. Você pode entrar como membro ou seguir sem login.</p></div><div className="grid gap-4 md:grid-cols-2"><HomeCard icon={<Music2 />} title="Indicar uma música" description="Envie uma sugestão em um wizard guiado para análise ministerial." cta="Clique aqui para indicar" onClick={() => setView('suggest')} /><HomeCard icon={<HeartHandshake />} title="Votar em músicas" description="A votação pública estará disponível em breve." cta="Clique aqui para votar" disabled badge="Em breve" onClick={() => setView('vote')} /></div></section>
+}
+
+type LyricsCandidate = { id: string | null; trackName: string | null; artistName: string | null; excerpt: string }
+
+function LyricsConfirmationStep({ suggestion, onSession, onContinue, onBack }: { suggestion: typeof emptySuggestion; onSession: (id: string) => void; onContinue: () => void; onBack: () => void }) {
+  const [candidate, setCandidate] = useState<LyricsCandidate | null>(null)
+  const [sessionId, setSessionId] = useState('')
+  const [attempt, setAttempt] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [exhausted, setExhausted] = useState(false)
+  const storageKey = `atalayah:lyrics:${suggestion.youtube_video_id || `${suggestion.musica}:${suggestion.artista}`}`
+
+  async function search(id?: string) {
+    setLoading(true); setError(null); setCandidate(null)
+    try {
+      const response = await fetch('/api/louvor/lyrics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: id, trackName: suggestion.musica, artistName: suggestion.artista }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error)
+      setSessionId(data.sessionId); onSession(data.sessionId); window.localStorage.setItem(storageKey, data.sessionId)
+      setAttempt(data.attempt || 1); setCandidate(data.candidate ?? null); setExhausted(Boolean(data.exhausted))
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível buscar a letra.') }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { void search(window.localStorage.getItem(storageKey) || undefined) }, [storageKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function decide(confirmed: boolean) {
+    setLoading(true); setError(null)
+    try {
+      const response = await fetch('/api/louvor/lyrics/decision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, confirmed }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error)
+      if (confirmed) return onContinue()
+      if (data.exhausted) { setCandidate(null); setExhausted(true); setLoading(false); return }
+      await search(sessionId)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível registrar sua decisão.'); setLoading(false) }
+  }
+
+  return <div className="space-y-5" aria-live="polite">
+    <div><div className="flex items-center justify-between gap-3"><h3 className="text-lg font-bold text-white">Confirme a letra da música</h3><Badge variant="outline" className="border-brand/30 text-brand">Tentativa {Math.min(attempt, 3)} de 3</Badge></div><p className="mt-1 text-sm text-[#94A3B8]">Mostramos somente um pequeno trecho. A letra completa fica protegida no servidor e só será associada após sua confirmação.</p></div>
+    {loading && <div className="flex min-h-40 items-center justify-center gap-3 rounded-2xl border border-white/10 bg-black/20 text-[#CBD5E1]"><Loader2 className="h-5 w-5 animate-spin text-brand" />Buscando a letra da música...</div>}
+    {!loading && error && <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4"><p className="text-sm text-amber-100">{error}</p><Button type="button" variant="outline" onClick={() => search(sessionId || undefined)} className="mt-3 border-white/10 text-white"><RefreshCw className="h-4 w-4" />Tentar novamente</Button></div>}
+    {!loading && candidate && <div className="space-y-4"><article className="rounded-2xl border border-brand/30 bg-brand/10 p-5"><p className="text-xs font-semibold uppercase tracking-wider text-brand">{candidate.trackName} · {candidate.artistName || 'Artista não informado'}</p><p className="mt-4 whitespace-pre-line text-base leading-7 text-white">{candidate.excerpt}</p></article><div className="grid gap-3 sm:grid-cols-2"><Button type="button" onClick={() => decide(true)} className="h-12 bg-brand hover:bg-brand/90"><Check className="h-4 w-4" />Sim, é essa</Button><Button type="button" variant="outline" onClick={() => decide(false)} className="h-12 border-white/10 bg-transparent text-white hover:bg-white/10">Não, não é essa</Button></div></div>}
+    {!loading && exhausted && <div className="rounded-2xl border border-white/10 bg-black/20 p-5"><h4 className="font-bold text-white">Não conseguimos confirmar a letra correta dessa música.</h4><p className="mt-2 text-sm text-[#CBD5E1]">Sem problemas — você pode seguir com a indicação normalmente. A análise saberá que esta letra não foi confirmada.</p><div className="mt-4 flex flex-wrap gap-3"><Button type="button" onClick={onContinue} className="bg-brand hover:bg-brand/90">Seguir sem letra<ArrowRight className="h-4 w-4" /></Button><Button type="button" variant="outline" onClick={onBack} className="border-white/10 text-white">Ajustar música ou artista</Button></div></div>}
+  </div>
 }
 
 function WhoSuggestsStep({ suggestion, onSuggestionChange }: { suggestion: typeof emptySuggestion; onSuggestionChange: (suggestion: typeof emptySuggestion) => void }) {

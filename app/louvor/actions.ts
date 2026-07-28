@@ -3,7 +3,7 @@
 import { createHash } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { findBestLyrics } from '@/lib/music/lrclib'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { searchSoundchartsSong } from '@/lib/music/soundcharts'
 
 type JsonResponse<T = unknown> = { success: boolean; message: string; data?: T }
@@ -56,16 +56,10 @@ async function enrichNewSuggestion(supabase: Awaited<ReturnType<typeof createCli
   youtube_url?: string | null
 }) {
   try {
-    const [lyrics, soundcharts] = await Promise.all([
-      findBestLyrics({ trackName: payload.musica, artistName: payload.artista }).catch((error) => {
-        console.warn('LRCLIB public enrichment failed', error)
-        return null
-      }),
-      searchSoundchartsSong({ title: payload.musica, artist: payload.artista }).catch((error) => {
+    const soundcharts = await searchSoundchartsSong({ title: payload.musica, artist: payload.artista }).catch((error) => {
         console.warn('Soundcharts public enrichment failed', error)
         return null
-      }),
-    ])
+      })
 
     const metadataPayload = {
       youtube: {
@@ -84,11 +78,6 @@ async function enrichNewSuggestion(supabase: Awaited<ReturnType<typeof createCli
     const { error } = await supabase
       .from('worship_song_suggestions' as never)
       .update({
-        lyrics_plain: lyrics?.plainLyrics ?? null,
-        lyrics_synced: lyrics?.syncedLyrics ?? null,
-        lyrics_source: lyrics ? 'lrclib' : null,
-        lyrics_confidence: lyrics ? 0.75 : null,
-        lyrics_fetched_at: lyrics ? new Date().toISOString() : null,
         metadata_source: soundcharts ? 'soundcharts' : 'youtube',
         metadata_payload: metadataPayload,
         metadata_fetched_at: new Date().toISOString(),
@@ -159,6 +148,7 @@ export async function salvarIndicacao(payload: {
   youtube_thumbnail?: string | null
   youtube_duration?: string | null
   youtube_url?: string | null
+  lyrics_session_id?: string | null
 }): Promise<JsonResponse> {
   try {
     const required = [payload.nome, payload.tribo, payload.telefone, payload.musica]
@@ -228,9 +218,27 @@ export async function salvarIndicacao(payload: {
       next_step_other: payload.next_step === 'Outro' ? payload.next_step_other?.trim() || null : null,
     }
 
+    let lyricPatch: Record<string, unknown> = { letra_status: 'nao_confirmada' }
+    if (payload.lyrics_session_id) {
+      const admin = createAdminClient()
+      const { data: lyricSession } = await admin.from('lyrics_confirmation_sessions' as never).select('*').eq('id', payload.lyrics_session_id).gt('expires_at', new Date().toISOString()).maybeSingle()
+      const checkpoint = lyricSession as unknown as { status?: string; candidate_lyrics?: string; candidate_id?: string; rejected_results?: string[] } | null
+      lyricPatch = {
+        letra_status: checkpoint?.status === 'confirmed' ? 'confirmada' : 'nao_confirmada',
+        letra_texto: checkpoint?.status === 'confirmed' ? checkpoint.candidate_lyrics : null,
+        letra_fonte_id: checkpoint?.status === 'confirmed' ? checkpoint.candidate_id : null,
+        letra_tentativas: checkpoint?.rejected_results ?? [],
+        // Legacy field remains populated for historical consumers.
+        lyrics_plain: checkpoint?.status === 'confirmed' ? checkpoint.candidate_lyrics : null,
+        lyrics_source: checkpoint?.status === 'confirmed' ? 'lrclib-confirmed' : null,
+        lyrics_confidence: checkpoint?.status === 'confirmed' ? 1 : null,
+        lyrics_fetched_at: checkpoint?.status === 'confirmed' ? new Date().toISOString() : null,
+      }
+    }
+
     let { data, error } = await supabase
       .from('worship_song_suggestions' as never)
-      .insert(fullSuggestion as never)
+      .insert({ ...fullSuggestion, ...lyricPatch } as never)
       .select('id')
       .single()
 
