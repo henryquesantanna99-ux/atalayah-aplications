@@ -22,12 +22,17 @@ export type WorshipSuggestionRow = {
   next_step_other: string | null
   status: string
   lyrics_plain?: string | null
+  letra_texto?: string | null
+  letra_status?: 'pendente' | 'confirmada' | 'nao_confirmada' | null
   metadata_payload?: Record<string, unknown> | null
   age_range?: string | null
   ministry?: string | null
   region?: string | null
   conversion_time?: string | null
   participation_time?: string | null
+  gender?: string | null
+  state?: string | null
+  country?: string | null
 }
 
 export async function requireWorshipAdmin() {

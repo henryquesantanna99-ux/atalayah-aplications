@@ -18,6 +18,7 @@ function classification(overrides: Partial<SpiritualClassification> = {}): Spiri
     convictions: [],
     evidence: [],
     segments: { tribo: 'Jovens', faixaEtaria: '18 a 25 anos', ministerio: 'Louvor' },
+    thematicFindings: [{ theme: 'esperança', dimension: 'espiritual', polarity: 'bem', evidence: 'Encontrei esperança', evidenceSource: 'resposta' }],
     ...overrides,
   }
 }
@@ -70,6 +71,9 @@ describe('classifySuggestionExpression', () => {
       regiao: 'Centro',
       tempoConversao: '1 a 3 anos',
       tempoParticipacao: '6 meses a 2 anos',
+      genero: 'Não informado',
+      estado: 'Não informado',
+      pais: 'Não informado',
     })
   })
 })
@@ -103,5 +107,11 @@ describe('summarizeCollectivePatterns', () => {
     assert.ok(summary.evolution.declining.some((item) => item.category === 'themes' && item.label === 'santidade' && item.delta === -50))
     assert.ok(summary.evolution.emerging.some((item) => item.category === 'themes' && item.label === 'missão' && item.current === 50))
     assert.equal(summary.evolution.comparedDays, 1)
+  })
+
+  it('calculates dimension percentages and rejects correlations from small samples', () => {
+    const summary = summarizeCollectivePatterns([classification(), classification({ suggestionId: '2' })])
+    assert.deepEqual(summary.dimensionQuantification[0], { dimension: 'espiritual', polarity: 'bem', count: 2, percentage: 100 })
+    assert.equal(summary.correlations.every((item) => !item.relevant), true)
   })
 })

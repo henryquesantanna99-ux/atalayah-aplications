@@ -11,16 +11,14 @@ import { getLatestMinistryProfile, requireWorshipAdmin, type AdminResponse, type
 async function enrichSuggestionIfNeeded(supabase: Awaited<ReturnType<typeof requireWorshipAdmin>>['supabase'], suggestion: WorshipSuggestionRow) {
   if (suggestion.lyrics_plain && suggestion.metadata_payload) return suggestion
 
-  const [lyrics, soundcharts] = await Promise.all([
-    suggestion.lyrics_plain ? Promise.resolve(null) : findBestLyrics({ trackName: suggestion.song_title, artistName: suggestion.artist }).catch((error) => {
-      console.warn('LRCLIB daily analysis enrichment failed', error)
+  const lyrics = suggestion.letra_status !== 'nao_confirmada' && !suggestion.lyrics_plain ? await findBestLyrics({ trackName: suggestion.song_title, artistName: suggestion.artist }).catch((error) => {
+      console.warn('LRCLIB legacy enrichment failed', error)
       return null
-    }),
-    suggestion.metadata_payload ? Promise.resolve(null) : searchSoundchartsSong({ title: suggestion.song_title, artist: suggestion.artist }).catch((error) => {
+    }) : null
+  const soundcharts = suggestion.metadata_payload ? null : await searchSoundchartsSong({ title: suggestion.song_title, artist: suggestion.artist }).catch((error) => {
       console.warn('Soundcharts daily analysis enrichment failed', error)
       return null
-    }),
-  ])
+    })
 
   const patch: Record<string, unknown> = {}
   if (lyrics) {
@@ -52,7 +50,8 @@ async function buildAiCollectiveClassifications(suggestions: WorshipSuggestionRo
     id: suggestion.id,
     musica: suggestion.song_title,
     artista: suggestion.artist,
-    letra: suggestion.lyrics_plain?.slice(0, 2500) ?? null,
+    letra: suggestion.letra_status === 'confirmada' ? (suggestion.letra_texto || suggestion.lyrics_plain)?.slice(0, 4000) ?? null : null,
+    letra_status: suggestion.letra_status || (suggestion.lyrics_plain ? 'confirmada' : 'nao_confirmada'),
     motivo: suggestion.reason,
     area_trabalhada: suggestion.spiritual_area,
     experiencia: suggestion.spiritual_experience_note,
@@ -67,7 +66,7 @@ async function buildAiCollectiveClassifications(suggestions: WorshipSuggestionRo
     },
   }))
 
-  const prompt = `Responda apenas em JSON válido no formato {"classifications":[]}. Classifique cada indicação como expressão espiritual coletiva, sem diagnosticar pessoas e sem inferir necessidades apenas pela letra. Para cada item, retorne: suggestionId, songTitle, themes, needs, emotions, nextSteps, convictions, evidence, segments. Use somente padrões descritivos e linguagem de apoio ao discernimento pastoral. Dados: ${JSON.stringify(compactInput)}`
+  const prompt = `ETAPA 1 — CLASSIFICAÇÃO. Responda apenas JSON válido {"classifications":[]}. Para cada indicação retorne suggestionId e thematicFindings (lista de {theme, dimension, polarity, evidence, evidenceSource}). dimension deve ser espiritual, relacional, material ou outra; polarity deve ser bem, mal ou neutro; evidenceSource deve ser letra, resposta ou metadado. Identifique todos os temas sustentados, cite evidência real curta, jamais invente texto. Letra ausente/não confirmada só permite metadados e respostas, nunca inferências sobre a letra. Também retorne themes, needs, emotions, nextSteps, convictions e evidence. Não diagnostique pessoas. Dados: ${JSON.stringify(compactInput)}`
 
   try {
     const result = await generateText({ model: openai(process.env.OPENAI_ANALYSIS_MODEL || 'gpt-4o-mini'), prompt })
@@ -84,12 +83,28 @@ async function buildAiCollectiveClassifications(suggestions: WorshipSuggestionRo
         nextSteps: Array.isArray(aiItem.nextSteps) ? aiItem.nextSteps.map(String).slice(0, 6) : item.nextSteps,
         convictions: Array.isArray(aiItem.convictions) ? aiItem.convictions.map(String).slice(0, 6) : item.convictions,
         evidence: Array.isArray(aiItem.evidence) ? aiItem.evidence.map(String).slice(0, 6) : item.evidence,
+        thematicFindings: Array.isArray(aiItem.thematicFindings) ? aiItem.thematicFindings.filter((finding): finding is Record<string, unknown> => Boolean(finding && typeof finding === 'object')).map((finding) => ({ theme: String(finding.theme || 'tema'), dimension: ['espiritual', 'relacional', 'material', 'outra'].includes(String(finding.dimension)) ? String(finding.dimension) as 'espiritual' | 'relacional' | 'material' | 'outra' : 'outra', polarity: ['bem', 'mal', 'neutro'].includes(String(finding.polarity)) ? String(finding.polarity) as 'bem' | 'mal' | 'neutro' : 'neutro', evidence: String(finding.evidence || '').slice(0, 220), evidenceSource: ['letra', 'resposta', 'metadado'].includes(String(finding.evidenceSource)) ? String(finding.evidenceSource) as 'letra' | 'resposta' | 'metadado' : 'resposta' })).slice(0, 10) : item.thematicFindings,
       }
     })
   } catch (error) {
     console.error('buildAiCollectiveClassifications fallback', error)
     return fallback
   }
+}
+
+async function interpretAndPlan(summary: SpiritualSummary, classifications: ReturnType<typeof classifySuggestionExpression>[], ministryProfile: Awaited<ReturnType<typeof getLatestMinistryProfile>>) {
+  const examples = classifications.slice(0, 8).map((item) => ({ pessoa: item.personName, musica: item.songTitle, achados: item.thematicFindings.slice(0, 3) }))
+  const fallback = {
+    interpretation: summary.dimensionQuantification.slice(0, 3).map((metric) => ({ title: `${metric.dimension}: ${metric.polarity}`, narrative: `${metric.percentage}% dos achados classificados pertencem a esta combinação. A liderança deve ler o dado à luz da visão e da estação ministerial registradas.`, examples: examples.filter((item) => item.achados.some((finding) => finding.dimension === metric.dimension)).slice(0, 3) })),
+    actions: summary.quantification.themes.slice(0, 3).map((theme) => ({ title: `Responder ao tema “${theme.label}”`, action: `Avaliar as músicas indicadas que expressam ${theme.label} para repertório, ensino ou cuidado pastoral.`, rationale: `${theme.count} ocorrência(s), ${theme.percentage}% das indicações.`, source: `quantification.themes:${theme.label}` })),
+  }
+  if (!process.env.OPENAI_API_KEY) return fallback
+  const prompt = `ETAPAS 5 E 6 — INTERPRETAÇÃO E AÇÕES. Responda apenas JSON {"interpretation":[],"actions":[]}. Interprete os cálculos determinísticos no contexto ministerial informado. Cada interpretação: {title,narrative,examples:[{pessoa,musica,evidence}]}; use 1–3 exemplos reais fornecidos. Cada ação: {title,action,rationale,source}; sugira repertório somente entre as músicas fornecidas e ancore source em um achado/correlação. Não diagnostique indivíduos. Contexto ministerial: ${JSON.stringify(ministryProfile || {})}. Métricas: ${JSON.stringify({ dimensions: summary.dimensionQuantification, themes: summary.quantification.themes, correlations: summary.correlations.filter((item) => item.relevant) })}. Exemplos: ${JSON.stringify(examples)}`
+  try {
+    const result = await generateText({ model: openai(process.env.OPENAI_ANALYSIS_MODEL || 'gpt-4o-mini'), prompt })
+    const parsed = JSON.parse(result.text) as typeof fallback
+    return Array.isArray(parsed.interpretation) && Array.isArray(parsed.actions) ? parsed : fallback
+  } catch (error) { console.error('interpretAndPlan fallback', error); return fallback }
 }
 
 export async function gerarAnaliseEspiritualDoDia(dateKey: string): Promise<AdminResponse> {
@@ -115,6 +130,7 @@ export async function gerarAnaliseEspiritualDoDia(dateKey: string): Promise<Admi
 
     const previousQuantifications = ((previousSummaries ?? []) as unknown as Array<{ quantification: SpiritualSummary['quantification'] }>).map((item) => item.quantification)
     const summary = summarizeCollectivePatterns(classifications, previousQuantifications)
+    const report = await interpretAndPlan(summary, classifications, ministryProfile)
     const modelUsed = process.env.OPENAI_API_KEY ? process.env.OPENAI_ANALYSIS_MODEL || 'gpt-4o-mini' : 'collective-heuristic'
     const { data: run, error: runError } = await supabase.from('spiritual_intelligence_runs' as never).insert({ analysis_date: dateKey, status: 'completed', suggestions_count: suggestions.length, ministry_profile_id: ministryProfile?.id || null, model_used: modelUsed, created_by: user.id, completed_at: new Date().toISOString() } as never).select('id').single()
     if (runError) throw runError
@@ -129,10 +145,15 @@ export async function gerarAnaliseEspiritualDoDia(dateKey: string): Promise<Admi
       quantification: summary.quantification,
       segmentation: summary.segmentation,
       associations: summary.associations,
+      correlations: summary.correlations,
       evolution: summary.evolution,
       discernment: summary.discernment,
       recommendations: summary.recommendations,
-      charts_payload: { ...summary.quantification, segments: summary.segmentation, associations: summary.associations },
+      interpretation: report.interpretation,
+      actions: report.actions,
+      ministry_context: ministryProfile || {},
+      pipeline_version: 2,
+      charts_payload: { ...summary.quantification, dimensions: summary.dimensionQuantification, segments: summary.segmentation, correlations: summary.correlations },
     } as never)
     if (summaryError) throw summaryError
 
