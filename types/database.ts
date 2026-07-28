@@ -738,6 +738,48 @@ export interface Database {
         }
         Relationships: []
       }
+      automation_workflows: {
+        Row: { id: string; name: string; description: string | null; status: 'draft' | 'active' | 'inactive' | 'archived'; published_version: number | null; created_by: string; created_at: string; updated_at: string }
+        Insert: { id?: string; name: string; description?: string | null; status?: 'draft' | 'active' | 'inactive' | 'archived'; published_version?: number | null; created_by: string; created_at?: string; updated_at?: string }
+        Update: { name?: string; description?: string | null; status?: 'draft' | 'active' | 'inactive' | 'archived'; published_version?: number | null; updated_at?: string }
+        Relationships: []
+      }
+      automation_workflow_versions: {
+        Row: { id: string; workflow_id: string; version: number; graph_snapshot: Json; published_at: string; published_by: string | null }
+        Insert: { id?: string; workflow_id: string; version: number; graph_snapshot: Json; published_at?: string; published_by?: string | null }
+        Update: Record<string, never>
+        Relationships: []
+      }
+      automation_nodes: {
+        Row: { id: string; workflow_id: string; node_key: string; node_type: string; position: Json; configuration: Json; input_ports: Json; output_ports: Json; visual_metadata: Json; created_at: string; updated_at: string }
+        Insert: { id?: string; workflow_id: string; node_key: string; node_type: string; position?: Json; configuration?: Json; input_ports?: Json; output_ports?: Json; visual_metadata?: Json; created_at?: string; updated_at?: string }
+        Update: { node_key?: string; node_type?: string; position?: Json; configuration?: Json; input_ports?: Json; output_ports?: Json; visual_metadata?: Json; updated_at?: string }
+        Relationships: []
+      }
+      automation_edges: {
+        Row: { id: string; workflow_id: string; source_node_id: string; target_node_id: string; source_port_id: string; target_port_id: string; visual_metadata: Json; created_at: string; updated_at: string }
+        Insert: { id?: string; workflow_id: string; source_node_id: string; target_node_id: string; source_port_id: string; target_port_id: string; visual_metadata?: Json; created_at?: string; updated_at?: string }
+        Update: { source_node_id?: string; target_node_id?: string; source_port_id?: string; target_port_id?: string; visual_metadata?: Json; updated_at?: string }
+        Relationships: []
+      }
+      automation_credentials: {
+        Row: { id: string; name: string; provider: string; secret_ref: string; created_by: string; created_at: string; updated_at: string }
+        Insert: { id?: string; name: string; provider: string; secret_ref: string; created_by: string; created_at?: string; updated_at?: string }
+        Update: { name?: string; provider?: string; secret_ref?: string; updated_at?: string }
+        Relationships: []
+      }
+      automation_executions: {
+        Row: { id: string; workflow_id: string; workflow_version_id: string | null; status: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled'; input: Json | null; output: Json | null; error: Json | null; duration_ms: number | null; is_test: boolean; event_idempotency_key: string | null; started_at: string | null; finished_at: string | null; created_at: string }
+        Insert: { id?: string; workflow_id: string; workflow_version_id?: string | null; status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled'; input?: Json | null; output?: Json | null; error?: Json | null; duration_ms?: number | null; is_test?: boolean; event_idempotency_key?: string | null; started_at?: string | null; finished_at?: string | null; created_at?: string }
+        Update: { status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled'; input?: Json | null; output?: Json | null; error?: Json | null; duration_ms?: number | null; started_at?: string | null; finished_at?: string | null }
+        Relationships: []
+      }
+      automation_node_executions: {
+        Row: { id: string; execution_id: string; node_key: string; status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'; input: Json | null; output: Json | null; error: Json | null; duration_ms: number | null; started_at: string | null; finished_at: string | null; created_at: string }
+        Insert: { id?: string; execution_id: string; node_key: string; status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'; input?: Json | null; output?: Json | null; error?: Json | null; duration_ms?: number | null; started_at?: string | null; finished_at?: string | null; created_at?: string }
+        Update: { status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'; input?: Json | null; output?: Json | null; error?: Json | null; duration_ms?: number | null; started_at?: string | null; finished_at?: string | null }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
