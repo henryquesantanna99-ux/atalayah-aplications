@@ -21,6 +21,8 @@ type Contact = { id: string; phone: string; name: string|null; lead_id: string|n
 type Message = { id: string; contact_id: string; direction: 'inbound'|'outbound'; body: string|null; sent_at: string; status: string|null }
 type Tab = 'overview'|'crm'|'chats'|'automations'
 type Entity = 'stage'|'source'|'tag'|'field'
+type QueryError = { table: string; code?: string; message: string }
+type RealtimeStatus = 'connecting'|'connected'|'error'|'timed_out'|'closed'
 
 const colors = ['#3B82F6','#8B5CF6','#EC4899','#F59E0B','#10B981','#06B6D4','#EF4444','#64748B']
 const db = createClient() as any
@@ -34,24 +36,59 @@ export function CommercialDashboard() {
   const [contacts,setContacts] = useState<Contact[]>([]); const [messages,setMessages] = useState<Message[]>([])
   const [team,setTeam] = useState<TeamUser[]>([]); const [assigneeFilter,setAssigneeFilter] = useState(canManage?'all':profile.id)
   const [selectedContact,setSelectedContact] = useState(''); const [query,setQuery] = useState(''); const [loading,setLoading] = useState(true)
+  const [chatErrors,setChatErrors] = useState<QueryError[]>([]); const [realtimeStatus,setRealtimeStatus] = useState<RealtimeStatus>('connecting')
   const [leadModal,setLeadModal] = useState<{open:boolean;lead?:Lead;stageId?:string}>({open:false})
   const [entityModal,setEntityModal] = useState<{open:boolean;type:Entity;initial?:Stage}>({open:false,type:'stage'})
   const fileRef = useRef<HTMLInputElement>(null)
+  const messagesRef = useRef<Message[]>([])
+
+  useEffect(()=>{ messagesRef.current=messages },[messages])
+
+  const reportQueryError = useCallback((table:string,error:{code?:string;message:string}|null|undefined) => {
+    if (!error) return null
+    const safeError={table,code:error.code,message:error.message}
+    console.error('Supabase query failed',safeError)
+    return safeError
+  },[])
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{data:b},{data:s},{data:o},{data:t},{data:f},{data:l},{data:c},{data:m},{data:u}] = await Promise.all([
+    const [boardsResult,stagesResult,sourcesResult,tagsResult,fieldsResult,leadsResult,contactsResult,messagesResult,teamResult] = await Promise.all([
       db.from('crm_boards').select('id,name').order('created_at'), db.from('crm_stages').select('*').order('position'),
       db.from('crm_sources').select('*').order('created_at'), db.from('crm_tags').select('*').order('created_at'),
       db.from('crm_custom_fields').select('*').order('position'), db.from('crm_leads').select('*').order('position'),
       db.from('crm_contacts').select('*').order('created_at',{ascending:false}), db.from('crm_messages').select('*').order('sent_at'),
       db.from('profiles').select('id,full_name,email,avatar_url').eq('status','active').order('full_name'),
     ])
-    setBoards(b||[]); setStages(s||[]); setSources(o||[]); setTags(t||[]); setFields(f||[]); setLeads(l||[]); setContacts(c||[]); setMessages(m||[]); setTeam(u||[])
-    setBoardId(current => current || b?.[0]?.id || ''); setSelectedContact(current=>current||c?.[0]?.id||''); setLoading(false)
-  },[])
+    const results=[
+      ['crm_boards',boardsResult],['crm_stages',stagesResult],['crm_sources',sourcesResult],['crm_tags',tagsResult],
+      ['crm_custom_fields',fieldsResult],['crm_leads',leadsResult],['crm_contacts',contactsResult],
+      ['crm_messages',messagesResult],['profiles',teamResult],
+    ] as const
+    results.forEach(([table,result])=>reportQueryError(table,result.error))
+    setChatErrors(([['crm_contacts',contactsResult.error],['crm_messages',messagesResult.error]] as const)
+      .filter(([,error])=>Boolean(error))
+      .map(([table,error])=>({table,code:error!.code,message:error!.message})))
+    if(!boardsResult.error)setBoards(boardsResult.data||[]); if(!stagesResult.error)setStages(stagesResult.data||[]); if(!sourcesResult.error)setSources(sourcesResult.data||[]); if(!tagsResult.error)setTags(tagsResult.data||[]); if(!fieldsResult.error)setFields(fieldsResult.data||[]); if(!leadsResult.error)setLeads(leadsResult.data||[]); if(!contactsResult.error)setContacts(contactsResult.data||[]); if(!messagesResult.error)setMessages(messagesResult.data||[]); if(!teamResult.error)setTeam(teamResult.data||[])
+    setBoardId(current => current || boardsResult.data?.[0]?.id || ''); setSelectedContact(current=>current||contactsResult.data?.[0]?.id||''); setLoading(false)
+  },[reportQueryError])
   useEffect(()=>{ void load() },[load])
   useEffect(() => {
+    let hasSubscribed=false
+    const loadMissedMessages=async()=>{
+      const cursor=messagesRef.current.reduce<Message|undefined>((latest,message)=>!latest||message.sent_at>latest.sent_at||(message.sent_at===latest.sent_at&&message.id>latest.id)?message:latest,undefined)
+      if(!cursor)return
+      const {data,error}=await db.from('crm_messages').select('*').gte('sent_at',cursor.sent_at).order('sent_at').order('id')
+      const safeError=reportQueryError('crm_messages',error)
+      if(safeError){setChatErrors(current=>[...current.filter(item=>item.table!=='crm_messages'),safeError]);return}
+      const missed=(data||[]).filter((message:Message)=>message.sent_at>cursor.sent_at||(message.sent_at===cursor.sent_at&&message.id>cursor.id))
+      setChatErrors(current=>current.filter(item=>item.table!=='crm_messages'))
+      setMessages(current=>{
+        const byId=new Map(current.map(message=>[message.id,message]))
+        missed.forEach((message:Message)=>byId.set(message.id,message))
+        return Array.from(byId.values()).sort((a,b)=>a.sent_at.localeCompare(b.sent_at)||a.id.localeCompare(b.id))
+      })
+    }
     const channel = db.channel('commercial-crm-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_contacts' }, (event: { eventType: string; new: Contact }) => {
         if (!event.new?.id) return
@@ -67,9 +104,21 @@ export function CommercialDashboard() {
           const next = exists ? current.map(message => message.id === event.new.id ? event.new : message) : [...current, event.new]
           return next.sort((a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime())
         })
-      }).subscribe((status: string) => { if (status === 'CHANNEL_ERROR') toast.error('Não foi possível atualizar as conversas em tempo real') })
+      }).subscribe((status: string) => {
+        if(status==='SUBSCRIBED'){
+          setRealtimeStatus('connected')
+          if(hasSubscribed)void loadMissedMessages()
+          hasSubscribed=true
+        }else if(status==='CHANNEL_ERROR'){
+          setRealtimeStatus('error'); toast.error('Não foi possível atualizar as conversas em tempo real')
+        }else if(status==='TIMED_OUT'){
+          setRealtimeStatus('timed_out')
+        }else if(status==='CLOSED'){
+          setRealtimeStatus('closed')
+        }
+      })
     return () => { void db.removeChannel(channel) }
-  }, [])
+  }, [reportQueryError])
 
   const boardSources=sources.filter(x=>x.board_id===boardId), boardTags=tags.filter(x=>x.board_id===boardId), boardFields=fields.filter(x=>x.board_id===boardId)
   const boardLeads=leads.filter(x=>x.board_id===boardId&&(assigneeFilter==='all'||x.assignee_id===assigneeFilter))
@@ -102,7 +151,7 @@ export function CommercialDashboard() {
     {tab==='crm'&&<main className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">{!boardId?<div className="flex-1 overflow-y-auto p-8"><Empty text={canManage?'Crie um pipeline para começar.':'Você ainda não possui tarefas atribuídas.'} onClick={canManage?createBoard:undefined}/></div>:<><div className="w-full shrink-0 overflow-hidden p-3 px-5 flex flex-wrap gap-2 border-b border-white/[.06] bg-[#07101d] z-10"><div className="search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar cards..."/></div>{canManage&&<><button className="control" onClick={()=>setEntityModal({open:true,type:'stage'})}><Plus size={14}/>Etapa</button><button className="control" onClick={()=>setEntityModal({open:true,type:'source'})}><Plus size={14}/>Origem</button><button className="control" onClick={()=>setEntityModal({open:true,type:'tag'})}><TagIcon size={14}/>Tag</button><button className="control" onClick={()=>setEntityModal({open:true,type:'field'})}><Plus size={14}/>Campo personalizado</button></>}<label className="control"><UserRound size={14}/><span className="sr-only">Filtrar por responsável</span><select className="bg-transparent outline-none" value={assigneeFilter} onChange={e=>setAssigneeFilter(e.target.value)} disabled={!canManage}>{canManage&&<option className="bg-[#0d1b2e]" value="all">Todos os responsáveis</option>}<option className="bg-[#0d1b2e]" value={profile.id}>Minhas tarefas</option>{canManage&&team.filter(user=>user.id!==profile.id).map(user=><option className="bg-[#0d1b2e]" key={user.id} value={user.id}>{user.full_name||user.email}</option>)}</select></label><span className="flex-1"/>{canManage&&<><input ref={fileRef} hidden type="file" accept=".csv" onChange={e=>void importCsv(e.target.files?.[0])}/><button className="control" onClick={()=>fileRef.current?.click()}><Upload size={14}/>CSV</button><button className="control" onClick={exportCsv}><Download size={14}/></button></>}</div><div className="commercial-kanban-scroll flex-1 min-w-0 min-h-0 overflow-x-auto overflow-y-auto"><div className="flex w-max min-w-full gap-4 p-4 min-h-full items-start">{boardStages.map(stage=>{const cards=boardLeads.filter(l=>l.stage_id===stage.id&&(l.name+(l.company||'')).toLowerCase().includes(query.toLowerCase()));return <section key={stage.id} className="w-[310px] min-h-full flex flex-col rounded-xl bg-[#0a1727] border border-white/[.06]" onDragOver={e=>e.preventDefault()} onDrop={e=>void moveLead(e.dataTransfer.getData('lead'),stage.id)}><header className="shrink-0 p-3 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{background:stage.color}}/><b className="text-sm flex-1 truncate">{stage.name}</b><span className="text-xs text-slate-500">{cards.length}</span>{canManage&&<button title="Editar etapa" onClick={()=>setEntityModal({open:true,type:'stage',initial:stage})}><Pencil size={13} className="text-slate-600 hover:text-blue-400"/></button>}{canManage&&<button onClick={()=>void removeEntity('stage',stage.id)}><Trash2 size={13} className="text-slate-600 hover:text-red-400"/></button>}</header><div className="flex-1 px-3">{cards.map(lead=><LeadCard key={lead.id} lead={lead} tags={boardTags} fields={boardFields} team={team} onOpen={()=>setLeadModal({open:true,lead})}/>)}</div>{canManage&&<button className="shrink-0 m-3 mt-2 py-2 text-xs text-slate-500 hover:text-white border border-dashed border-white/10 rounded-lg" onClick={()=>setLeadModal({open:true,stageId:stage.id})}><Plus size={13} className="inline"/> Adicionar card</button>}</section>})}{canManage&&<button onClick={()=>setEntityModal({open:true,type:'stage'})} className="w-[280px] h-12 shrink-0 border border-dashed border-white/10 rounded-xl text-sm text-slate-500 hover:text-white"><Plus size={15} className="inline mr-1"/>Nova etapa</button>}</div></div></>}</main>}
 
     {tab==='automations'&&<Automations/>}
-    {tab==='chats'&&<main className="flex-1 min-h-0 grid md:grid-cols-[340px_1fr] overflow-hidden"><aside className="min-h-0 border-r border-white/[.07] flex flex-col"><div className="shrink-0 p-4 border-b border-white/[.07]"><h2 className="font-semibold">Conversas</h2><p className="text-xs text-slate-500 mt-1">Mensagens armazenadas pela YCloud</p></div><div className="flex-1 overflow-y-auto">{chatContacts.length?chatContacts.map(c=>{const last=messages.filter(m=>m.contact_id===c.id).at(-1);const displayName=contactDisplayName(c);return <button key={c.id} onClick={()=>setSelectedContact(c.id)} className={`w-full p-4 flex gap-3 text-left border-b border-white/[.05] ${selectedContact===c.id?'bg-blue-500/[.08] border-l-2 border-l-blue-500':''}`}><div className="w-10 h-10 shrink-0 rounded-full bg-slate-700 grid place-items-center text-xs">{displayName.slice(0,2).toUpperCase()}</div><div className="min-w-0"><b className="text-sm block truncate">{displayName}</b>{c.name?.trim()&&<p className="text-[10px] text-slate-600 truncate">{c.phone}</p>}<p className="text-xs text-slate-500 truncate mt-1">{last?.body||'Sem mensagens'}</p></div></button>}):<SmallEmpty text="Nenhuma conversa recebida."/>}</div></aside><ChatDetail contact={activeContact} messages={activeMessages} onSent={message=>setMessages(current=>current.some(item=>item.id===message.id)?current:[...current,message])}/></main>}
+    {tab==='chats'&&<main className="flex-1 min-h-0 grid md:grid-cols-[340px_1fr] overflow-hidden"><aside className="min-h-0 border-r border-white/[.07] flex flex-col"><div className="shrink-0 p-4 border-b border-white/[.07]"><div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Conversas</h2><RealtimeIndicator status={realtimeStatus}/></div><p className="text-xs text-slate-500 mt-1">Mensagens armazenadas pela YCloud</p></div><div className="flex-1 overflow-y-auto">{chatErrors.length?<ChatLoadError errors={chatErrors} loading={loading} onRetry={()=>void load()}/>:chatContacts.length?chatContacts.map(c=>{const last=messages.filter(m=>m.contact_id===c.id).at(-1);const displayName=contactDisplayName(c);return <button key={c.id} onClick={()=>setSelectedContact(c.id)} className={`w-full p-4 flex gap-3 text-left border-b border-white/[.05] ${selectedContact===c.id?'bg-blue-500/[.08] border-l-2 border-l-blue-500':''}`}><div className="w-10 h-10 shrink-0 rounded-full bg-slate-700 grid place-items-center text-xs">{displayName.slice(0,2).toUpperCase()}</div><div className="min-w-0"><b className="text-sm block truncate">{displayName}</b>{c.name?.trim()&&<p className="text-[10px] text-slate-600 truncate">{c.phone}</p>}<p className="text-xs text-slate-500 truncate mt-1">{last?.body||'Sem mensagens'}</p></div></button>}):<SmallEmpty text="Nenhuma conversa recebida."/>}</div></aside><ChatDetail contact={activeContact} messages={activeMessages} onSent={message=>setMessages(current=>current.some(item=>item.id===message.id)?current:[...current,message])}/></main>}
     {leadModal.open&&<LeadModal boardId={boardId} stages={boardStages} sources={boardSources} tags={boardTags} fields={boardFields} team={team} initial={leadModal.lead} stageId={leadModal.stageId} onClose={()=>setLeadModal({open:false})} onSaved={()=>{setLeadModal({open:false});void load()}}/>}
     {entityModal.open&&<EntityModal type={entityModal.type} boardId={boardId} position={allBoardStages.length} initial={entityModal.initial} onClose={()=>setEntityModal(x=>({...x,open:false}))} onSaved={()=>{setEntityModal(x=>({...x,open:false}));void load()}}/>}
   </div>
@@ -114,6 +163,8 @@ function Panel({title,children}:{title:string;children:React.ReactNode}){return 
 function Bar({name,count,total,color}:{name:string;count:number;total:number;color:string}){const pct=total?count/total*100:0;return <div><div className="flex justify-between text-sm mb-2"><span className="text-slate-300">{name}</span><b>{count} <span className="font-normal text-slate-600">({Math.round(pct)}%)</span></b></div><div className="h-2 bg-white/5 rounded-full"><div className="h-full rounded-full" style={{width:`${pct}%`,background:color}}/></div></div>}
 function Empty({text,onClick}:{text:string;onClick?:()=>void}){return <div className="h-72 border border-dashed border-white/10 rounded-xl grid place-items-center text-center"><div><BarChart3 className="mx-auto text-slate-700 mb-3"/><p className="text-sm text-slate-400">{text}</p>{onClick&&<button className="primary mt-4" onClick={onClick}><Plus size={14}/>Criar pipeline</button>}</div></div>}
 function SmallEmpty({text}:{text:string}){return <p className="text-sm text-slate-600 p-6 text-center">{text}</p>}
+function ChatLoadError({errors,loading,onRetry}:{errors:QueryError[];loading:boolean;onRetry:()=>void}){const tables=errors.map(error=>error.table).join(' e ');return <div className="m-4 rounded-lg border border-red-400/20 bg-red-400/[.06] p-4 text-center"><p className="text-sm text-red-200">Não foi possível consultar {tables}.</p><p className="mt-1 text-xs text-slate-500">Verifique a conexão e tente novamente.</p><button className="control mt-4" disabled={loading} onClick={onRetry}>{loading&&<Loader2 size={14} className="animate-spin"/>}Tentar novamente</button></div>}
+function RealtimeIndicator({status}:{status:RealtimeStatus}){const labels:Record<RealtimeStatus,string>={connecting:'Conectando',connected:'Ao vivo',error:'Com falha',timed_out:'Tempo esgotado',closed:'Desconectado'};const healthy=status==='connected';return <span title={`Atualização em tempo real: ${labels[status]}`} className={`inline-flex items-center gap-1.5 text-[10px] ${healthy?'text-emerald-400':'text-slate-500'}`}><span className={`h-1.5 w-1.5 rounded-full ${healthy?'bg-emerald-400':'bg-slate-500'}`}/>{labels[status]}</span>}
 
 function EntityModal({type,boardId,position,initial,onClose,onSaved}:{type:Entity;boardId:string;position:number;initial?:Stage;onClose:()=>void;onSaved:()=>void}){
   const [name,setName]=useState(initial?.name||'');const [color,setColor]=useState(initial?.color||colors[0]);const [fieldType,setFieldType]=useState<CustomField['field_type']>('text');const [options,setOptions]=useState('');const labels={stage:initial?'Editar etapa':'Nova etapa',source:'Nova origem',tag:'Nova tag',field:'Novo campo personalizado'}
