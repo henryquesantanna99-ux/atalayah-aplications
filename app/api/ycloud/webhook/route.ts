@@ -1,87 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { normalizeWhatsAppPhone } from '@/lib/ycloud/phone'
-
-type JsonRecord = Record<string, unknown>
-
-function record(value: unknown): JsonRecord {
-  return value && typeof value === 'object' ? value as JsonRecord : {}
-}
-
-function text(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-function normalizeEvent(payload: JsonRecord) {
-  const eventName = text(payload.type) ?? text(payload.event) ?? ''
-  const raw = record(payload.whatsappInboundMessage ?? payload.whatsappMessage ?? payload.message ?? payload.data ?? payload)
-  const directionValue = `${eventName} ${text(raw.direction) ?? ''}`.toLowerCase()
-  const businessPhone = normalizeWhatsAppPhone(process.env.YCLOUD_WHATSAPP_FROM)
-  const from = normalizeWhatsAppPhone(raw.from)
-  const to = normalizeWhatsAppPhone(raw.to)
-  const direction: 'inbound' | 'outbound' = directionValue.includes('outbound') || directionValue.includes('sent') || (!!businessPhone && from === businessPhone)
-    ? 'outbound'
-    : 'inbound'
-  const phone = direction === 'inbound' ? from : to
-  const bodyValue = record(raw.text).body ?? raw.text ?? raw.body ?? raw.caption ?? record(raw.image).caption ?? record(raw.video).caption
-  const timestamp = Number(raw.timestamp ?? payload.timestamp)
-
-  return {
-    eventName,
-    messageId: text(raw.id) ?? text(raw.messageId) ?? text(payload.id),
-    direction,
-    phone,
-    name: text(raw.customerName) ?? text(raw.profileName) ?? text(record(raw.profile).name) ?? text(payload.customerName),
-    body: text(bodyValue),
-    messageType: text(raw.type) ?? 'text',
-    status: text(raw.status) ?? text(payload.status),
-    sentAt: Number.isFinite(timestamp)
-      ? new Date(timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp).toISOString()
-      : new Date().toISOString(),
-    statusOnly: directionValue.includes('status') || directionValue.includes('updated'),
-  }
-}
+import { asRecord, eventFingerprint, persistYCloudEvent } from '@/lib/ycloud/events'
 
 export async function POST(request: NextRequest) {
   const secret = process.env.YCLOUD_WEBHOOK_SECRET
-  if (secret && request.headers.get('x-webhook-secret') !== secret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  if (secret && request.headers.get('x-webhook-secret') !== secret) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let payload
+  try { payload = asRecord(await request.json()) } catch { return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 }) }
 
-  let payload: JsonRecord
-  try { payload = record(await request.json()) } catch {
-    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 })
-  }
-  const event = normalizeEvent(payload)
   const supabase = createAdminClient()
+  const fingerprint = eventFingerprint(payload)
+  const queued = await (supabase.from('ycloud_webhook_events' as never).upsert({
+    fingerprint, payload, status: 'pending', attempts: 0, received_at: new Date().toISOString(),
+  } as never, { onConflict: 'fingerprint', ignoreDuplicates: true }).select('id,status').single() as any)
+  if (queued.error && queued.error.code !== 'PGRST116') return NextResponse.json({ error: 'Webhook event not queued' }, { status: 500 })
+  if (!queued.data) return NextResponse.json({ received: true, duplicate: true })
 
-  if (event.statusOnly && event.messageId) {
-    const { error } = await supabase.from('crm_messages' as never)
-      .update({ status: event.status, payload } as never).eq('ycloud_id', event.messageId)
-    if (error) return NextResponse.json({ error: 'Message status not saved' }, { status: 500 })
-    return NextResponse.json({ received: true, updated: 'status' })
+  try {
+    const result = await persistYCloudEvent(supabase, payload)
+    await (supabase.from('ycloud_webhook_events' as never).update({ status: 'processed', processed_at: new Date().toISOString(), attempts: 1, last_error: null } as never).eq('id', queued.data.id) as any)
+    return NextResponse.json({ received: true, processed: result.kind })
+  } catch (error) {
+    await (supabase.from('ycloud_webhook_events' as never).update({ status: 'failed', attempts: 1, last_error: error instanceof Error ? error.message : 'Unknown error' } as never).eq('id', queued.data.id) as any)
+    // Event is durable; a 202 avoids an uncontrolled provider retry storm.
+    return NextResponse.json({ received: true, queued: true }, { status: 202 })
   }
-  if (!event.phone || !event.messageId) {
-    return NextResponse.json({ error: 'Missing contact phone or message id' }, { status: 400 })
-  }
-
-  const { data: existing } = await supabase.from('crm_contacts' as never)
-    .select('id,name').eq('phone', event.phone).maybeSingle() as unknown as { data: { id: string; name: string | null } | null }
-  let contact = existing
-  if (!contact) {
-    const result = await supabase.from('crm_contacts' as never)
-      .insert({ phone: event.phone, name: event.name } as never).select('id,name').single() as unknown as { data: { id: string; name: string | null } | null; error: { message: string } | null }
-    if (result.error || !result.data) return NextResponse.json({ error: 'Contact not saved' }, { status: 500 })
-    contact = result.data
-  } else if (event.name && event.name !== contact.name) {
-    await supabase.from('crm_contacts' as never).update({ name: event.name } as never).eq('id', contact.id)
-  }
-
-  const { error } = await supabase.from('crm_messages' as never).upsert({
-    ycloud_id: event.messageId, contact_id: contact.id, direction: event.direction,
-    body: event.body, message_type: event.messageType, status: event.status,
-    payload, sent_at: event.sentAt,
-  } as never, { onConflict: 'ycloud_id' })
-  if (error) return NextResponse.json({ error: 'Message not saved' }, { status: 500 })
-  return NextResponse.json({ received: true })
 }
