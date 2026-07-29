@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit } from '@/lib/permissions'
+import { z } from 'zod'
+import { calculateSongReadiness } from '@/lib/music/readiness'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
@@ -131,8 +133,28 @@ export async function createScale(input: {
     moment?: string | null
     version?: string | null
     referenceLink: string | null
+    playsLikeLastTime?: boolean
+    changes?: {
+      newKey: boolean
+      newArrangement: boolean
+      newIntro: boolean
+      newVocalDivision: boolean
+      newMember: boolean
+    }
+    changeNotes?: string | null
   }[]
 }) {
+  const songSchema = z.object({
+    setlistSongId: z.string().uuid(), songId: z.string().uuid().nullable().optional(),
+    songTitle: z.string().trim().min(1).max(200), artist: z.string().max(200).nullable().optional(),
+    soloistId: z.string().uuid().nullable(), keyNote: z.string().max(8).nullable(),
+    moment: z.enum(['Prévia', 'Adoração', 'Palavra', 'Celebração']).nullable().optional(),
+    version: z.string().max(200).nullable().optional(), referenceLink: z.string().url().nullable(),
+    playsLikeLastTime: z.boolean().default(true),
+    changes: z.object({ newKey: z.boolean(), newArrangement: z.boolean(), newIntro: z.boolean(), newVocalDivision: z.boolean(), newMember: z.boolean() }).default({ newKey: false, newArrangement: false, newIntro: false, newVocalDivision: false, newMember: false }),
+    changeNotes: z.string().trim().max(1000).nullable().default(null),
+  })
+  const parsedSongs = z.array(songSchema).parse(input.songs)
   const { supabase, user } = await requireEditor()
 
   let eventId = input.eventId
@@ -192,12 +214,18 @@ export async function createScale(input: {
     if (membersError) throw new Error(membersError.message)
   }
 
-  const validSongs = input.songs.filter((song) => song.songTitle.trim())
+  const validSongs = parsedSongs.filter((song) => song.songTitle.trim())
   if (input.event.type === 'culto' && validSongs.length > 0) {
     const { error: songsError } = await supabase
       .from('setlist_songs')
       .upsert(
-        validSongs.map((song, index) => ({
+        validSongs.map((song, index) => {
+          const changes = song.playsLikeLastTime
+            ? { newKey: false, newArrangement: false, newIntro: false, newVocalDivision: false, newMember: false }
+            : song.changes
+          const changeNotes = song.playsLikeLastTime ? null : song.changeNotes
+          const readiness = calculateSongReadiness({ playsLikeLastTime: song.playsLikeLastTime, changes, changeNotes })
+          return ({
           id: song.setlistSongId,
           event_id: eventId,
           song_id: song.songId ?? null,
@@ -209,7 +237,16 @@ export async function createScale(input: {
           moment: (song.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null) ?? null,
           version: song.version ?? null,
           reference_link: song.referenceLink,
-        })),
+          plays_like_last_time: song.playsLikeLastTime,
+          change_new_key: changes.newKey,
+          change_new_arrangement: changes.newArrangement,
+          change_new_intro: changes.newIntro,
+          change_new_vocal_division: changes.newVocalDivision,
+          change_new_member: changes.newMember,
+          change_notes: changeNotes,
+          readiness_index: readiness.readinessIndex,
+          suggested_stage: readiness.suggestedStage,
+        })}),
         { onConflict: 'id' }
       )
 

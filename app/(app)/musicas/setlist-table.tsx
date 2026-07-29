@@ -182,6 +182,8 @@ export function SetlistTable({
                   <th className="text-left py-3 px-4 text-xs font-medium text-[#64748B]">Momento</th>
                   <th className="text-left py-3 px-4 text-xs font-medium text-[#64748B]">Solista</th>
                   <th className="text-left py-3 px-4 text-xs font-medium text-[#64748B]">Versão</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-[#64748B]">Mudanças</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-[#64748B]">IP / Etapa</th>
                   {isAdmin && <th className="w-20 py-3 px-4" aria-label="Ações" />}
                 </tr>
               </thead>

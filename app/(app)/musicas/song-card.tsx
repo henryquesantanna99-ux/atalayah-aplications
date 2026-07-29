@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import { MomentBadge } from '@/components/ui/moment-badge'
 import type { SetlistSong } from '@/types/database'
+import { summarizeSongChanges } from '@/lib/music/readiness'
 
 interface Profile {
   id: string
@@ -52,6 +53,18 @@ export function SongCard({ song, index, isAdmin, onDelete }: SongCardProps) {
 
       {expanded && (
         <div className="px-4 pb-4 pt-0 border-t border-white/[0.04] space-y-2">
+          <div className="mt-3 rounded-card border border-white/[0.06] bg-white/[0.03] p-3 text-xs">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-medium text-white">Prontidão</span>
+              <span className="font-mono text-cyan-300">IP {song.readiness_index} · {song.suggested_stage}</span>
+            </div>
+            <p className="mt-2 text-[#94A3B8]">{summarizeSongChanges({
+              playsLikeLastTime: song.plays_like_last_time,
+              changes: { newKey: song.change_new_key, newArrangement: song.change_new_arrangement, newIntro: song.change_new_intro, newVocalDivision: song.change_new_vocal_division, newMember: song.change_new_member },
+              changeNotes: song.change_notes,
+            })}</p>
+            {song.change_notes && <p className="mt-1 text-[#64748B]">{song.change_notes}</p>}
+          </div>
           {song.version && (
             <p className="text-xs text-[#94A3B8]">Versão: {song.version}</p>
           )}

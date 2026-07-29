@@ -201,6 +201,15 @@ export interface Database {
           instrumental_guides: string[]
           playlist_link: string | null
           moment: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          plays_like_last_time: boolean
+          change_new_key: boolean
+          change_new_arrangement: boolean
+          change_new_intro: boolean
+          change_new_vocal_division: boolean
+          change_new_member: boolean
+          change_notes: string | null
+          readiness_index: number
+          suggested_stage: string
           created_at: string
           updated_at: string
         }
@@ -219,6 +228,15 @@ export interface Database {
           instrumental_guides?: string[]
           playlist_link?: string | null
           moment?: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          plays_like_last_time?: boolean
+          change_new_key?: boolean
+          change_new_arrangement?: boolean
+          change_new_intro?: boolean
+          change_new_vocal_division?: boolean
+          change_new_member?: boolean
+          change_notes?: string | null
+          readiness_index?: number
+          suggested_stage?: string
           created_at?: string
           updated_at?: string
         }
@@ -235,6 +253,15 @@ export interface Database {
           instrumental_guides?: string[]
           playlist_link?: string | null
           moment?: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
+          plays_like_last_time?: boolean
+          change_new_key?: boolean
+          change_new_arrangement?: boolean
+          change_new_intro?: boolean
+          change_new_vocal_division?: boolean
+          change_new_member?: boolean
+          change_notes?: string | null
+          readiness_index?: number
+          suggested_stage?: string
           updated_at?: string
         }
         Relationships: []
