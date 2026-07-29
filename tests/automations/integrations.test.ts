@@ -4,7 +4,7 @@ import { CredentialVault } from '../../lib/automations/integrations/credentials.
 import { assertSafeUrl, isForbiddenIp } from '../../lib/automations/integrations/http.ts'
 import { createOAuthStart, verifyOAuthState } from '../../lib/automations/integrations/oauth.ts'
 import { maskSensitive } from '../../lib/automations/integrations/privacy.ts'
-import { verifyMetaWebhook } from '../../lib/automations/integrations/webhooks.ts'
+import { validateYCloudWebhook, verifyMetaWebhook, verifyYCloudWebhook } from '../../lib/automations/integrations/webhooks.ts'
 import { createHmac, randomBytes } from 'node:crypto'
 import type { AuditEvent, CredentialRecord } from '../../lib/automations/integrations/types.ts'
 
@@ -48,4 +48,31 @@ test('webhook signature is checked with HMAC and logs are redacted', () => {
   assert.equal(verifyMetaWebhook(body, signature, secret), true)
   assert.equal(verifyMetaWebhook(`${body}x`, signature, secret), false)
   assert.deepEqual(maskSensitive({ phone: '+55 11 99999-1234', note: 'contato person@example.com', content: 'private chat' }), { phone: '[REDACTED]', note: 'contato p***@example.com', content: '[REDACTED]' })
+})
+
+test('YCloud accepts a valid unprefixed HMAC-SHA256 signature', () => {
+  const body = '{"type":"whatsapp.inbound_message","id":"message-1"}'
+  const secret = 'ycloud-signing-secret'
+  const signature = createHmac('sha256', secret).update(body).digest('hex')
+
+  assert.equal(verifyYCloudWebhook(body, signature, secret), true)
+  assert.equal(validateYCloudWebhook(body, signature, secret), null)
+  assert.equal(verifyYCloudWebhook(body, `sha256=${signature}`, secret), false)
+})
+
+test('YCloud rejects a missing or invalid signature and a body changed after signing', () => {
+  const body = '{"type":"whatsapp.inbound_message"}'
+  const secret = 'ycloud-signing-secret'
+  const signature = createHmac('sha256', secret).update(body).digest('hex')
+
+  assert.deepEqual(validateYCloudWebhook(body, null, secret), { error: 'Unauthorized', status: 401 })
+  assert.deepEqual(validateYCloudWebhook(body, '0'.repeat(64), secret), { error: 'Unauthorized', status: 401 })
+  assert.deepEqual(validateYCloudWebhook(`${body}\n`, signature, secret), { error: 'Unauthorized', status: 401 })
+})
+
+test('YCloud reports unavailable when its required signing secret is absent', () => {
+  assert.deepEqual(validateYCloudWebhook('{}', null, undefined), {
+    error: 'YCloud webhook secret is not configured',
+    status: 503,
+  })
 })

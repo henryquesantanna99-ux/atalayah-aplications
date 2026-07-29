@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeWhatsAppPhone } from '@/lib/ycloud/phone'
+import { validateYCloudWebhook } from '@/lib/automations/integrations/webhooks'
 
 type JsonRecord = Record<string, unknown>
 
@@ -43,13 +44,24 @@ function normalizeEvent(payload: JsonRecord) {
 }
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.YCLOUD_WEBHOOK_SECRET
-  if (secret && request.headers.get('x-webhook-secret') !== secret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  let rawBody: string
+  try {
+    rawBody = await request.text()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  const authenticationError = validateYCloudWebhook(
+    rawBody,
+    request.headers.get('x-ycloud-signature'),
+    process.env.YCLOUD_WEBHOOK_SECRET,
+  )
+  if (authenticationError) {
+    return NextResponse.json({ error: authenticationError.error }, { status: authenticationError.status })
   }
 
   let payload: JsonRecord
-  try { payload = record(await request.json()) } catch {
+  try { payload = record(JSON.parse(rawBody)) } catch {
     return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 })
   }
   const event = normalizeEvent(payload)
