@@ -780,6 +780,30 @@ export interface Database {
         Update: { status?: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled'; input?: Json | null; output?: Json | null; error?: Json | null; duration_ms?: number | null; started_at?: string | null; finished_at?: string | null }
         Relationships: []
       }
+      crm_contacts: {
+        Row: { id: string; phone: string; name: string | null; lead_id: string | null; created_at: string }
+        Insert: { id?: string; phone: string; name?: string | null; lead_id?: string | null; created_at?: string }
+        Update: { phone?: string; name?: string | null; lead_id?: string | null }
+        Relationships: []
+      }
+      crm_messages: {
+        Row: { id: string; ycloud_id: string | null; contact_id: string; direction: 'inbound' | 'outbound'; body: string | null; message_type: string; status: string | null; payload: Json; sent_at: string; created_at: string }
+        Insert: { id?: string; ycloud_id?: string | null; contact_id: string; direction: 'inbound' | 'outbound'; body?: string | null; message_type?: string; status?: string | null; payload?: Json; sent_at?: string; created_at?: string }
+        Update: { ycloud_id?: string | null; contact_id?: string; direction?: 'inbound' | 'outbound'; body?: string | null; message_type?: string; status?: string | null; payload?: Json; sent_at?: string }
+        Relationships: []
+      }
+      ycloud_sync_checkpoints: {
+        Row: { sync_key: string; mode: 'initial' | 'recovery' | 'reconcile'; cursor: string | null; window_start: string | null; window_end: string | null; last_success_at: string | null; last_error: string | null; metadata: Json; updated_at: string }
+        Insert: { sync_key: string; mode: 'initial' | 'recovery' | 'reconcile'; cursor?: string | null; window_start?: string | null; window_end?: string | null; last_success_at?: string | null; last_error?: string | null; metadata?: Json; updated_at?: string }
+        Update: { cursor?: string | null; window_start?: string | null; window_end?: string | null; last_success_at?: string | null; last_error?: string | null; metadata?: Json; updated_at?: string }
+        Relationships: []
+      }
+      ycloud_webhook_events: {
+        Row: { id: string; fingerprint: string; payload: Json; status: 'pending' | 'processed' | 'failed'; attempts: number; last_error: string | null; received_at: string; processed_at: string | null }
+        Insert: { id?: string; fingerprint: string; payload: Json; status?: 'pending' | 'processed' | 'failed'; attempts?: number; last_error?: string | null; received_at?: string; processed_at?: string | null }
+        Update: { status?: 'pending' | 'processed' | 'failed'; attempts?: number; last_error?: string | null; processed_at?: string | null }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

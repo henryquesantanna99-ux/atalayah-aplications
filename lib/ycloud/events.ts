@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database, Json } from '@/types/database'
 import { normalizeWhatsAppPhone } from './phone.ts'
 
-export type JsonRecord = Record<string, unknown>
+export type JsonRecord = Record<string, Json | undefined>
 
 export function asRecord(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {}
@@ -41,7 +43,7 @@ export function eventFingerprint(payload: JsonRecord) {
 }
 
 // Deliberately structural: this can be unit tested without a live Supabase project.
-export async function persistYCloudEvent(supabase: any, payload: JsonRecord) {
+export async function persistYCloudEvent(supabase: SupabaseClient<Database>, payload: JsonRecord) {
   const event = normalizeYCloudEvent(payload)
   if (event.statusOnly && event.messageId) {
     const { error } = await supabase.from('crm_messages').update({ status: event.status, payload }).eq('ycloud_id', event.messageId)

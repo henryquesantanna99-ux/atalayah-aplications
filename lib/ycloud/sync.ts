@@ -24,7 +24,8 @@ export async function syncYCloudHistory(options: { mode: SyncMode; maxPages?: nu
   if (!historyUrl) throw new Error('Histórico YCloud indisponível/não configurado: defina YCLOUD_HISTORY_URL somente se o produto contratado expuser essa API')
   const supabase = createAdminClient()
   const key = `ycloud:${process.env.YCLOUD_WHATSAPP_FROM ?? 'default'}:${options.mode}`
-  const { data: checkpoint } = await (supabase.from('ycloud_sync_checkpoints' as never).select('*').eq('sync_key', key).maybeSingle() as any)
+  const { data: checkpoint, error: checkpointError } = await supabase.from('ycloud_sync_checkpoints').select('*').eq('sync_key', key).maybeSingle()
+  if (checkpointError) throw new Error(`Checkpoint lookup failed: ${checkpointError.message}`)
   let cursor: string | undefined = checkpoint?.cursor ?? undefined
   let since = checkpoint?.window_end ?? undefined
   if (!since && options.mode === 'initial') since = process.env.YCLOUD_INITIAL_SYNC_FROM
@@ -46,12 +47,13 @@ export async function syncYCloudHistory(options: { mode: SyncMode; maxPages?: nu
     for (const item of items) { await persistYCloudEvent(supabase, asRecord(item)); imported++ }
     pages++
     cursor = nextCursor(body)
-    await (supabase.from('ycloud_sync_checkpoints' as never).upsert({
+    const { error: saveError } = await supabase.from('ycloud_sync_checkpoints').upsert({
       sync_key: key, mode: options.mode, cursor: cursor ?? null,
       window_start: since ?? null, window_end: cursor ? checkpoint?.window_end ?? null : runStartedAt,
       last_success_at: new Date().toISOString(), last_error: null,
       metadata: { pages, imported }, updated_at: new Date().toISOString(),
-    } as never, { onConflict: 'sync_key' }) as any)
+    }, { onConflict: 'sync_key' })
+    if (saveError) throw new Error(`Checkpoint save failed: ${saveError.message}`)
     if (!cursor || items.length === 0) break
   }
   return { mode: options.mode, pages, imported, hasMore: Boolean(cursor), checkpoint: cursor ?? runStartedAt }
