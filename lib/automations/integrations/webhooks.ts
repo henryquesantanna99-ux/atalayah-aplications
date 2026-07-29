@@ -14,5 +14,12 @@ export function verifyMetaWebhook(rawBody: Buffer | string, signature: string | 
 }
 
 export function verifyYCloudWebhook(rawBody: Buffer | string, signature: string | null, secret: string) {
-  return verifyHmacWebhook({ rawBody, signature, secret, algorithm: 'sha256' })
+  // YCloud API v2 sends the raw hexadecimal HMAC digest, without a `sha256=` prefix.
+  return verifyHmacWebhook({ rawBody, signature, secret, algorithm: 'sha256', prefix: '' })
+}
+
+export function validateYCloudWebhook(rawBody: Buffer | string, signature: string | null, secret: string | undefined) {
+  if (!secret) return { error: 'YCloud webhook secret is not configured', status: 503 as const }
+  if (!verifyYCloudWebhook(rawBody, signature, secret)) return { error: 'Unauthorized', status: 401 as const }
+  return null
 }
