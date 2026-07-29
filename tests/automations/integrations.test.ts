@@ -60,11 +60,12 @@ test('YCloud accepts a valid unprefixed HMAC-SHA256 signature', () => {
   assert.equal(verifyYCloudWebhook(body, `sha256=${signature}`, secret), false)
 })
 
-test('YCloud rejects an invalid signature and a body changed after signing', () => {
+test('YCloud rejects a missing or invalid signature and a body changed after signing', () => {
   const body = '{"type":"whatsapp.inbound_message"}'
   const secret = 'ycloud-signing-secret'
   const signature = createHmac('sha256', secret).update(body).digest('hex')
 
+  assert.deepEqual(validateYCloudWebhook(body, null, secret), { error: 'Unauthorized', status: 401 })
   assert.deepEqual(validateYCloudWebhook(body, '0'.repeat(64), secret), { error: 'Unauthorized', status: 401 })
   assert.deepEqual(validateYCloudWebhook(`${body}\n`, signature, secret), { error: 'Unauthorized', status: 401 })
 })
