@@ -66,34 +66,20 @@ export async function POST(request: NextRequest) {
   }
   const event = normalizeEvent(payload)
   const supabase = createAdminClient()
+  const fingerprint = eventFingerprint(payload)
+  const queued = await (supabase.from('ycloud_webhook_events' as never).upsert({
+    fingerprint, payload, status: 'pending', attempts: 0, received_at: new Date().toISOString(),
+  } as never, { onConflict: 'fingerprint', ignoreDuplicates: true }).select('id,status').single() as any)
+  if (queued.error && queued.error.code !== 'PGRST116') return NextResponse.json({ error: 'Webhook event not queued' }, { status: 500 })
+  if (!queued.data) return NextResponse.json({ received: true, duplicate: true })
 
-  if (event.statusOnly && event.messageId) {
-    const { error } = await supabase.from('crm_messages' as never)
-      .update({ status: event.status, payload } as never).eq('ycloud_id', event.messageId)
-    if (error) return NextResponse.json({ error: 'Message status not saved' }, { status: 500 })
-    return NextResponse.json({ received: true, updated: 'status' })
+  try {
+    const result = await persistYCloudEvent(supabase, payload)
+    await (supabase.from('ycloud_webhook_events' as never).update({ status: 'processed', processed_at: new Date().toISOString(), attempts: 1, last_error: null } as never).eq('id', queued.data.id) as any)
+    return NextResponse.json({ received: true, processed: result.kind })
+  } catch (error) {
+    await (supabase.from('ycloud_webhook_events' as never).update({ status: 'failed', attempts: 1, last_error: error instanceof Error ? error.message : 'Unknown error' } as never).eq('id', queued.data.id) as any)
+    // Event is durable; a 202 avoids an uncontrolled provider retry storm.
+    return NextResponse.json({ received: true, queued: true }, { status: 202 })
   }
-  if (!event.phone || !event.messageId) {
-    return NextResponse.json({ error: 'Missing contact phone or message id' }, { status: 400 })
-  }
-
-  const { data: existing } = await supabase.from('crm_contacts' as never)
-    .select('id,name').eq('phone', event.phone).maybeSingle() as unknown as { data: { id: string; name: string | null } | null }
-  let contact = existing
-  if (!contact) {
-    const result = await supabase.from('crm_contacts' as never)
-      .insert({ phone: event.phone, name: event.name } as never).select('id,name').single() as unknown as { data: { id: string; name: string | null } | null; error: { message: string } | null }
-    if (result.error || !result.data) return NextResponse.json({ error: 'Contact not saved' }, { status: 500 })
-    contact = result.data
-  } else if (event.name && event.name !== contact.name) {
-    await supabase.from('crm_contacts' as never).update({ name: event.name } as never).eq('id', contact.id)
-  }
-
-  const { error } = await supabase.from('crm_messages' as never).upsert({
-    ycloud_id: event.messageId, contact_id: contact.id, direction: event.direction,
-    body: event.body, message_type: event.messageType, status: event.status,
-    payload, sent_at: event.sentAt,
-  } as never, { onConflict: 'ycloud_id' })
-  if (error) return NextResponse.json({ error: 'Message not saved' }, { status: 500 })
-  return NextResponse.json({ received: true })
 }
