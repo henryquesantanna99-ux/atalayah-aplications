@@ -46,7 +46,7 @@ export async function requireWorshipAdmin() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'admin' && !canEdit(profile?.email ?? user.email)) {
+  if (!canEdit(profile?.role)) {
     throw new Error('Forbidden')
   }
 
