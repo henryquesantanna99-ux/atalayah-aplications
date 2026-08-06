@@ -1,47 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { normalizeWhatsAppPhone } from '@/lib/ycloud/phone'
 import { validateYCloudWebhook } from '@/lib/automations/integrations/webhooks'
-
-type JsonRecord = Record<string, unknown>
-
-function record(value: unknown): JsonRecord {
-  return value && typeof value === 'object' ? value as JsonRecord : {}
-}
-
-function text(value: unknown) {
-  return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-function normalizeEvent(payload: JsonRecord) {
-  const eventName = text(payload.type) ?? text(payload.event) ?? ''
-  const raw = record(payload.whatsappInboundMessage ?? payload.whatsappMessage ?? payload.message ?? payload.data ?? payload)
-  const directionValue = `${eventName} ${text(raw.direction) ?? ''}`.toLowerCase()
-  const businessPhone = normalizeWhatsAppPhone(process.env.YCLOUD_WHATSAPP_FROM)
-  const from = normalizeWhatsAppPhone(raw.from)
-  const to = normalizeWhatsAppPhone(raw.to)
-  const direction: 'inbound' | 'outbound' = directionValue.includes('outbound') || directionValue.includes('sent') || (!!businessPhone && from === businessPhone)
-    ? 'outbound'
-    : 'inbound'
-  const phone = direction === 'inbound' ? from : to
-  const bodyValue = record(raw.text).body ?? raw.text ?? raw.body ?? raw.caption ?? record(raw.image).caption ?? record(raw.video).caption
-  const timestamp = Number(raw.timestamp ?? payload.timestamp)
-
-  return {
-    eventName,
-    messageId: text(raw.id) ?? text(raw.messageId) ?? text(payload.id),
-    direction,
-    phone,
-    name: text(raw.customerName) ?? text(raw.profileName) ?? text(record(raw.profile).name) ?? text(payload.customerName),
-    body: text(bodyValue),
-    messageType: text(raw.type) ?? 'text',
-    status: text(raw.status) ?? text(payload.status),
-    sentAt: Number.isFinite(timestamp)
-      ? new Date(timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp).toISOString()
-      : new Date().toISOString(),
-    statusOnly: directionValue.includes('status') || directionValue.includes('updated'),
-  }
-}
+import { asRecord, eventFingerprint, persistYCloudEvent, type JsonRecord } from '@/lib/ycloud/events'
 
 export async function POST(request: NextRequest) {
   let rawBody: string
@@ -61,10 +21,9 @@ export async function POST(request: NextRequest) {
   }
 
   let payload: JsonRecord
-  try { payload = record(JSON.parse(rawBody)) } catch {
+  try { payload = asRecord(JSON.parse(rawBody)) } catch {
     return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 })
   }
-  const event = normalizeEvent(payload)
   const supabase = createAdminClient()
   const fingerprint = eventFingerprint(payload)
   const queued = await supabase.from('ycloud_webhook_events').upsert({

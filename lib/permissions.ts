@@ -1,8 +1,6 @@
-export const EDITOR_EMAILS = [
-  'henryquesantanna99@gmail.com',
-  'contatoingridcamila@gmail.com',
-] as const
+export type PersistedRole = 'admin' | 'editor' | 'integrante'
 
-export function canEdit(email: string | null | undefined): boolean {
-  return EDITOR_EMAILS.includes(email as (typeof EDITOR_EMAILS)[number])
+/** Authorization is persisted in profiles.role; e-mail is never an authority. */
+export function canEdit(role: string | null | undefined): boolean {
+  return role === 'admin' || role === 'editor'
 }

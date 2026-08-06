@@ -23,8 +23,9 @@ interface EventInput {
 async function requireEditor() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Unauthorized')
-  if (!canEdit(user.email)) throw new Error('Forbidden')
+  if (!user) throw new Error('Você precisa entrar para editar a agenda.')
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  if (!canEdit(profile?.role)) throw new Error('Você não possui permissão para criar repertórios')
   return { supabase, user }
 }
 
@@ -133,142 +134,17 @@ export async function createScale(input: {
     referenceLink: string | null
   }[]
 }) {
-  const { supabase, user } = await requireEditor()
-
-  let eventId = input.eventId
-
-  if (!eventId) {
-    const { data: createdEvent, error: eventError } = await supabase
-      .from('events')
-      .insert({
-        ...input.event,
-        created_by: user.id,
-      })
-      .select('id')
-      .single()
-
-    if (eventError) throw new Error(eventError.message)
-    eventId = createdEvent.id
-  } else {
-    const { error: eventError } = await supabase.from('events').update(input.event).eq('id', eventId)
-    if (eventError) throw new Error(eventError.message)
-
-    const [{ error: membersDeleteError }, { error: songsDeleteError }] = await Promise.all([
-      input.members.length > 0
-        ? supabase.from('event_members').delete().eq('event_id', eventId).not('profile_id', 'in', `(${input.members.map((member) => member.profileId).join(',')})`)
-        : supabase.from('event_members').delete().eq('event_id', eventId),
-      input.songs.length > 0
-        ? supabase.from('setlist_songs').delete().eq('event_id', eventId).not('id', 'in', `(${input.songs.map((song) => song.setlistSongId).join(',')})`)
-        : supabase.from('setlist_songs').delete().eq('event_id', eventId),
-    ])
-    if (membersDeleteError) throw new Error(membersDeleteError.message)
-    if (songsDeleteError) throw new Error(songsDeleteError.message)
-  }
-
-  if (input.members.length > 0) {
-    const functionIds = Array.from(new Set(input.members.map((member) => member.scheduleFunctionId)))
-    const { data: validFunctions, error: functionsError } = await supabase
-      .from('schedule_functions')
-      .select('id')
-      .in('id', functionIds)
-      .eq('is_active', true)
-    if (functionsError) throw new Error(functionsError.message)
-    if ((validFunctions ?? []).length !== functionIds.length) {
-      throw new Error('Uma ou mais funções da escala são inválidas ou inativas.')
-    }
-
-    const { error: membersError } = await supabase
-      .from('event_members')
-      .upsert(
-        input.members.map((member) => ({
-          event_id: eventId,
-          profile_id: member.profileId,
-          schedule_function_id: member.scheduleFunctionId,
-          instrument: null,
-        })),
-        { onConflict: 'event_id,profile_id' }
-      )
-
-    if (membersError) throw new Error(membersError.message)
-  }
-
   const validSongs = input.songs.filter((song) => song.songTitle.trim())
-  if (input.event.type === 'culto' && validSongs.length > 0) {
-    const { error: songsError } = await supabase
-      .from('setlist_songs')
-      .upsert(
-        validSongs.map((song, index) => ({
-          id: song.setlistSongId,
-          event_id: eventId,
-          song_id: song.songId ?? null,
-          order_index: index,
-          song_title: song.songTitle.trim(),
-          artist: song.artist ?? null,
-          soloist_id: song.soloistId,
-          key_note: song.keyNote,
-          moment: (song.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null) ?? null,
-          version: song.version ?? null,
-          reference_link: song.referenceLink,
-        })),
-        { onConflict: 'id' }
-      )
-
-    if (songsError) throw new Error(songsError.message)
-  }
-
-  if (input.event.type === 'culto') {
-    // Repertoires are versioned separately from the editable legacy setlist. This
-    // keeps the execution that actually happened available for historical analysis.
-    const { data: latestRepertoire, error: repertoireLookupError } = await supabase
-      .from('repertoires')
-      .select('id, version, status')
-      .eq('event_id', eventId)
-      .order('version', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (repertoireLookupError) throw new Error(repertoireLookupError.message)
-
-    if (latestRepertoire && latestRepertoire.status !== 'archived') {
-      const { error: archiveError } = await supabase
-        .from('repertoires')
-        .update({ status: 'archived', archived_at: new Date().toISOString() })
-        .eq('id', latestRepertoire.id)
-      if (archiveError) throw new Error(archiveError.message)
-    }
-
-    const eventIsPast = input.event.date < new Date().toISOString().slice(0, 10)
-    const { data: repertoire, error: repertoireError } = await supabase
-      .from('repertoires')
-      .insert({
-        event_id: eventId,
-        name: input.event.title,
-        event_date: input.event.date,
-        status: eventIsPast ? 'consolidated' : 'draft',
-        version: (latestRepertoire?.version ?? 0) + 1,
-      })
-      .select('id')
-      .single()
-
-    if (repertoireError) throw new Error(repertoireError.message)
-
-    const catalogSongs = validSongs.filter(
-      (song): song is typeof song & { songId: string } => Boolean(song.songId)
-    )
-    if (catalogSongs.length > 0) {
-      const { error: repertoireItemsError } = await supabase.from('repertoire_items').insert(
-        catalogSongs.map((song, index) => ({
-          repertoire_id: repertoire.id,
-          song_id: song.songId,
-          order_index: index,
-          key_note: song.keyNote,
-          arrangement_changed: Boolean(song.version?.trim()),
-          arrangement_notes: song.version?.trim() || null,
-          liturgical_moment: song.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null,
-        }))
-      )
-      if (repertoireItemsError) throw new Error(repertoireItemsError.message)
-    }
+  const { supabase } = await requireEditor()
+  const { error } = await supabase.rpc('save_event_scale', {
+    p_event_id: input.eventId,
+    p_event: input.event,
+    p_members: input.members,
+    p_songs: validSongs,
+  } as never)
+  if (error) {
+    const safeMessage = error.message.match(/Você não possui permissão para criar repertórios|Uma ou mais funções da escala são inválidas ou inativas\.|Não foi possível cadastrar a música [^\n]+/)?.[0]
+    throw new Error(safeMessage ?? 'Não foi possível salvar a escala. Tente novamente.')
   }
 
   revalidatePath('/agenda')
