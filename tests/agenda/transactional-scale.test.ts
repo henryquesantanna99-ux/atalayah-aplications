@@ -37,3 +37,9 @@ test('an active editor is authorized without requiring the admin role', () => {
   assert.match(migration, /NOT public\.current_user_can_edit\(\)/)
   assert.match(migration, /Você não possui permissão para criar repertórios/)
 })
+
+test('migration bootstraps repertoire tables in older Supabase projects', () => {
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS repertoires/)
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS repertoire_items/)
+  assert.match(migration, /to_regclass\('public\.' \|\| table_name\) IS NOT NULL/)
+})

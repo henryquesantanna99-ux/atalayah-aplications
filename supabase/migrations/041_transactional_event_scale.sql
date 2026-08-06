@@ -9,6 +9,45 @@ UPDATE profiles SET role = 'editor'
 WHERE email IN ('henryquesantanna99@gmail.com', 'contatoingridcamila@gmail.com')
   AND role = 'integrante';
 
+-- Some hosted projects were bootstrapped before the repertoire migration was
+-- introduced. Keep this migration independently runnable without weakening the
+-- foreign keys used by the transactional function.
+DO $$ BEGIN
+  CREATE TYPE repertoire_status AS ENUM ('draft', 'consolidated', 'archived');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS repertoires (
+  id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+  event_id UUID NOT NULL REFERENCES events(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL CHECK (length(btrim(name)) > 0),
+  event_date DATE NOT NULL,
+  status repertoire_status NOT NULL DEFAULT 'draft',
+  version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
+  archived_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (event_id, version),
+  CHECK ((status = 'archived' AND archived_at IS NOT NULL) OR status <> 'archived')
+);
+
+CREATE TABLE IF NOT EXISTS repertoire_items (
+  id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+  repertoire_id UUID NOT NULL REFERENCES repertoires(id) ON DELETE RESTRICT,
+  song_id UUID NOT NULL REFERENCES songs(id) ON DELETE RESTRICT,
+  order_index INTEGER NOT NULL DEFAULT 0 CHECK (order_index >= 0),
+  key_note TEXT,
+  arrangement_changed BOOLEAN NOT NULL DEFAULT false,
+  arrangement_notes TEXT,
+  liturgical_moment TEXT CHECK (liturgical_moment IN ('Prévia', 'Adoração', 'Palavra', 'Celebração')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (repertoire_id, order_index)
+);
+
+ALTER TABLE repertoires ENABLE ROW LEVEL SECURITY;
+ALTER TABLE repertoire_items ENABLE ROW LEVEL SECURITY;
+
 CREATE OR REPLACE FUNCTION public.current_user_can_edit()
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
@@ -27,17 +66,15 @@ BEGIN
     'events', 'event_members', 'setlist_songs', 'songs', 'song_variations',
     'repertoires', 'repertoire_items'
   ] LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', table_name || '_editor_all', table_name);
-    EXECUTE format(
-      'CREATE POLICY %I ON %I FOR ALL USING (public.current_user_can_edit()) WITH CHECK (public.current_user_can_edit())',
-      table_name || '_editor_all', table_name
-    );
+    IF to_regclass('public.' || table_name) IS NOT NULL THEN
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', table_name || '_editor_all', table_name);
+      EXECUTE format(
+        'CREATE POLICY %I ON public.%I FOR ALL USING (public.current_user_can_edit()) WITH CHECK (public.current_user_can_edit())',
+        table_name || '_editor_all', table_name
+      );
+    END IF;
   END LOOP;
 END $$;
-
-DROP POLICY IF EXISTS song_variations_editor_all ON song_variations;
-CREATE POLICY song_variations_editor_all ON song_variations FOR ALL
-  USING (public.current_user_can_edit()) WITH CHECK (public.current_user_can_edit());
 
 CREATE OR REPLACE FUNCTION public.save_event_scale(
   p_event_id uuid,
