@@ -18,7 +18,10 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
   const year = parseInt(searchParams.year ?? String(now.getFullYear()))
   const month = parseInt(searchParams.month ?? String(now.getMonth() + 1))
 
-  const isEditor = canEdit(user?.email)
+  const { data: currentProfile } = user
+    ? await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    : { data: null }
+  const isEditor = canEdit(currentProfile?.role)
 
   const startDate = new Date(year, 0, 1).toISOString().split('T')[0]
   const endDate = new Date(year, 11, 31).toISOString().split('T')[0]

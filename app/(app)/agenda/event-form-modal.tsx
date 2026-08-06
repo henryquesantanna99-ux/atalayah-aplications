@@ -351,7 +351,9 @@ export function EventFormModal({
       handleOpenChange(false)
       router.refresh()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao criar evento.')
+      // createScale only returns allow-listed domain messages; never render raw
+      // PostgreSQL diagnostics in the client.
+      toast.error(err instanceof Error ? err.message : 'Não foi possível salvar a escala. Tente novamente.')
     } finally {
       setSaving(false)
     }

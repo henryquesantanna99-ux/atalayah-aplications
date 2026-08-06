@@ -13,7 +13,7 @@ export default async function MusicasPage() {
   const { data: currentProfile } = user
     ? await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
     : { data: null }
-  const isEditor = canEdit(user?.email) || currentProfile?.role === 'admin'
+  const isEditor = canEdit(currentProfile?.role)
 
   // Fetch the catalog variations and the base songs separately.
   // Some songs may exist before a variation row is created; those are still

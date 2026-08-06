@@ -8,7 +8,8 @@ async function requireAuthorizedEditor() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
-  if (!canEdit(user.email)) throw new Error('Forbidden')
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  if (!canEdit(profile?.role)) throw new Error('Forbidden')
   return supabase
 }
 

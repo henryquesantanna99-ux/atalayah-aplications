@@ -37,7 +37,7 @@ async function requireEditor() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (!canEdit(user.email) && profile?.role !== 'admin') throw new Error('Forbidden')
+  if (!canEdit(profile?.role)) throw new Error('Forbidden')
   return { supabase, user }
 }
 
