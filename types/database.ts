@@ -29,22 +29,22 @@ export type TeamMastery =
 export interface Database {
   public: {
     Tables: {
-      sentinela_seasons: {
-        Row: { id: string; name: string; is_active: boolean; starts_at: string; ends_at: string | null; created_at: string }
-        Insert: { id?: string; name: string; is_active?: boolean; starts_at: string; ends_at?: string | null; created_at?: string }
-        Update: { name?: string; is_active?: boolean; starts_at?: string; ends_at?: string | null }
+      user_product_scopes: {
+        Row: { user_id: string; product: 'main' | 'sentinela'; created_at: string }
+        Insert: { user_id: string; product: 'main' | 'sentinela'; created_at?: string }
+        Update: never
         Relationships: []
       }
-      sentinela_memberships: {
-        Row: { id: string; season_id: string; user_id: string; role: 'participant' | 'mentor' | 'journey_admin'; status: 'active' | 'inactive'; grants: string[]; created_at: string }
-        Insert: { id?: string; season_id: string; user_id: string; role: 'participant' | 'mentor' | 'journey_admin'; status?: 'active' | 'inactive'; grants?: string[]; created_at?: string }
-        Update: { role?: 'participant' | 'mentor' | 'journey_admin'; status?: 'active' | 'inactive'; grants?: string[] }
+      sentinela_profiles: {
+        Row: { user_id: string; display_name: string | null; created_at: string; updated_at: string }
+        Insert: { user_id: string; display_name?: string | null; created_at?: string; updated_at?: string }
+        Update: { display_name?: string | null; updated_at?: string }
         Relationships: []
       }
-      sentinela_rehearsals: {
-        Row: { id: string; season_id: string; title: string; scheduled_at: string; private_notes: string | null; created_by: string; created_at: string; updated_at: string }
-        Insert: { id?: string; season_id: string; title: string; scheduled_at: string; private_notes?: string | null; created_by: string; created_at?: string; updated_at?: string }
-        Update: { title?: string; scheduled_at?: string; private_notes?: string | null; updated_at?: string }
+      sentinela_onboarding: {
+        Row: { user_id: string; state: 'profile' | 'preferences' | 'complete'; created_at: string; updated_at: string }
+        Insert: { user_id: string; state?: 'profile' | 'preferences' | 'complete'; created_at?: string; updated_at?: string }
+        Update: { state?: 'profile' | 'preferences' | 'complete'; updated_at?: string }
         Relationships: []
       }
       profiles: {
@@ -874,7 +874,16 @@ export interface Database {
       sentinela_diagnostics: SentinelaTable<SentinelaRecord & { membership_id: string; kind: 'baseline' | 'final'; responses: Json; submitted_at: string | null; reviewed_by: string | null; reviewed_at: string | null }>
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      complete_sentinela_signup: {
+        Args: Record<PropertyKey, never>
+        Returns: { product: string; onboarding_state: string }[]
+      }
+      save_event_scale: {
+        Args: { p_event_id: string | null; p_event: Json; p_members: Json; p_songs: Json }
+        Returns: string
+      }
+    }
     Enums: {
       repertoire_status: 'draft' | 'consolidated' | 'archived'
       repertoire_mastery: 'low' | 'medium' | 'high'
