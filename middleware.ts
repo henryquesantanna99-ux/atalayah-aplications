@@ -26,6 +26,7 @@ function isPublicRoute(pathname: string) {
   return (
     PUBLIC_PAGE_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
     AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
+    SENTINELA_PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
     isPublicInscricaoApi(pathname) ||
     isPublicAutomationWebhook(pathname) ||
     pathname === '/api/mercado-pago/webhook'
@@ -61,7 +62,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check profile status for authenticated users on protected routes
-  if (user && !publicRoute) {
+  if (user && !publicRoute && !pathname.startsWith('/sentinela/')) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('status, onboarding_completed')

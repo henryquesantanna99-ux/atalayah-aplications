@@ -59,6 +59,7 @@ export async function POST(request: Request) {
     password,
     email_confirm: true,
     user_metadata: fullName ? { full_name: fullName } : {},
+    app_metadata: { provisioning_product: 'main' },
   })
 
   if (error) {
