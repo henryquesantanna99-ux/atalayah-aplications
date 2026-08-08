@@ -4,6 +4,7 @@ import { createMiddlewareClient } from '@/lib/supabase/middleware'
 
 const PUBLIC_PAGE_ROUTES = ['/', '/louvor', '/inscricao']
 const AUTH_ROUTES = ['/login', '/auth/callback', '/auth/error']
+const SENTINELA_PUBLIC_ROUTES = ['/sentinela/login', '/sentinela/criar-conta', '/sentinela/auth/callback', '/sentinela/recuperar-senha', '/sentinela/redefinir-senha']
 
 function isPublicInscricaoApi(pathname: string) {
   return /^\/api\/inscricoes\/[^/]+\/(status|pix)$/.test(pathname)
@@ -17,6 +18,7 @@ function isPublicRoute(pathname: string) {
   return (
     PUBLIC_PAGE_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
     AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
+    SENTINELA_PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
     isPublicInscricaoApi(pathname) ||
     isPublicAutomationWebhook(pathname) ||
     pathname === '/api/mercado-pago/webhook'
@@ -42,7 +44,7 @@ export async function middleware(request: NextRequest) {
 
   // Not authenticated → redirect to login (except public routes)
   if (!user && !publicRoute) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return NextResponse.redirect(new URL(pathname.startsWith('/sentinela/') ? '/sentinela/login' : '/login', request.url))
   }
 
   // Authenticated on login page → redirect to dashboard
@@ -51,7 +53,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check profile status for authenticated users on protected routes
-  if (user && !publicRoute) {
+  if (user && !publicRoute && !pathname.startsWith('/sentinela/')) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('status, onboarding_completed')
