@@ -115,11 +115,11 @@ export function DayDetailModal({
           : Promise.resolve({ data: [] }),
       ])
 
-      const membersList = (membersResult.data ?? []) as EventMemberWithProfile[]
+      const membersList: EventMemberWithProfile[] = membersResult.data ?? []
       setMembers(membersList)
-      setSongs((songsResult.data ?? []) as EventSetlistSong[])
-      setProfiles((profilesResult.data ?? []) as Pick<Profile, 'id' | 'full_name'>[])
-      setScheduleFunctions((functionsResult.data ?? []) as ScheduleFunctionOption[])
+      setSongs(songsResult.data ?? [])
+      setProfiles(profilesResult.data ?? [])
+      setScheduleFunctions(functionsResult.data ?? [])
 
       const mine = membersList.find((m) => m.profile_id === userId)
       setMyMembership(mine ?? null)
