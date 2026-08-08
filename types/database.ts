@@ -15,6 +15,24 @@ export type TeamMastery =
 export interface Database {
   public: {
     Tables: {
+      sentinela_seasons: {
+        Row: { id: string; name: string; is_active: boolean; starts_at: string; ends_at: string | null; created_at: string }
+        Insert: { id?: string; name: string; is_active?: boolean; starts_at: string; ends_at?: string | null; created_at?: string }
+        Update: { name?: string; is_active?: boolean; starts_at?: string; ends_at?: string | null }
+        Relationships: []
+      }
+      sentinela_memberships: {
+        Row: { id: string; season_id: string; user_id: string; role: 'participant' | 'mentor' | 'journey_admin'; status: 'active' | 'inactive'; grants: string[]; created_at: string }
+        Insert: { id?: string; season_id: string; user_id: string; role: 'participant' | 'mentor' | 'journey_admin'; status?: 'active' | 'inactive'; grants?: string[]; created_at?: string }
+        Update: { role?: 'participant' | 'mentor' | 'journey_admin'; status?: 'active' | 'inactive'; grants?: string[] }
+        Relationships: []
+      }
+      sentinela_rehearsals: {
+        Row: { id: string; season_id: string; title: string; scheduled_at: string; private_notes: string | null; created_by: string; created_at: string; updated_at: string }
+        Insert: { id?: string; season_id: string; title: string; scheduled_at: string; private_notes?: string | null; created_by: string; created_at?: string; updated_at?: string }
+        Update: { title?: string; scheduled_at?: string; private_notes?: string | null; updated_at?: string }
+        Relationships: []
+      }
       profiles: {
         Row: {
           id: string
@@ -22,7 +40,7 @@ export interface Database {
           full_name: string | null
           birth_date: string | null
           avatar_url: string | null
-          role: 'admin' | 'integrante'
+          role: 'admin' | 'editor' | 'integrante'
           status: 'pending' | 'active' | 'inactive'
           onboarding_completed: boolean
           created_at: string
@@ -34,7 +52,7 @@ export interface Database {
           full_name?: string | null
           birth_date?: string | null
           avatar_url?: string | null
-          role?: 'admin' | 'integrante'
+          role?: 'admin' | 'editor' | 'integrante'
           status?: 'pending' | 'active' | 'inactive'
           onboarding_completed?: boolean
           created_at?: string
@@ -46,7 +64,7 @@ export interface Database {
           full_name?: string | null
           birth_date?: string | null
           avatar_url?: string | null
-          role?: 'admin' | 'integrante'
+          role?: 'admin' | 'editor' | 'integrante'
           status?: 'pending' | 'active' | 'inactive'
           onboarding_completed?: boolean
           updated_at?: string
