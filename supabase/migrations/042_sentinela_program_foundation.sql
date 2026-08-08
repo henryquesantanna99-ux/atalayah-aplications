@@ -119,9 +119,24 @@ create policy "members read memberships" on public.sentinela_memberships for sel
 create policy "admins manage memberships" on public.sentinela_memberships for all using(public.sentinela_has_membership(season_id,array['journey_admin'])) with check(public.sentinela_has_membership(season_id,array['journey_admin']));
 
 -- Published journey/competency definitions are collective; writes are staff-only.
-do $$ declare t text; begin foreach t in array array['sentinela_phases','sentinela_weeks','sentinela_milestones','sentinela_levels','sentinela_missions'] loop
+-- sentinela_levels has no independent lifecycle: its visibility follows its
+-- parent milestone instead of referencing a non-existent status column.
+do $$ declare t text; begin foreach t in array array['sentinela_phases','sentinela_weeks','sentinela_milestones','sentinela_missions'] loop
  execute format('create policy "members read %1$s" on public.%1$I for select using(public.sentinela_has_membership(season_id) and status <> ''draft'')',t);
  execute format('create policy "staff manage %1$s" on public.%1$I for all using(public.sentinela_is_staff(season_id)) with check(public.sentinela_is_staff(season_id))',t); end loop; end $$;
+create policy "members read sentinela_levels" on public.sentinela_levels for select
+  using (
+    public.sentinela_has_membership(season_id)
+    and exists (
+      select 1 from public.sentinela_milestones milestone
+      where milestone.id = sentinela_levels.milestone_id
+        and milestone.season_id = sentinela_levels.season_id
+        and milestone.status <> 'draft'
+    )
+  );
+create policy "staff manage sentinela_levels" on public.sentinela_levels for all
+  using (public.sentinela_is_staff(season_id))
+  with check (public.sentinela_is_staff(season_id));
 do $$ declare t text; begin foreach t in array array['sentinela_responsibilities','sentinela_squads','sentinela_squad_members'] loop
  execute format('create policy "members read %1$s" on public.%1$I for select using(public.sentinela_has_membership(season_id))',t);
  execute format('create policy "staff manage %1$s" on public.%1$I for all using(public.sentinela_is_staff(season_id)) with check(public.sentinela_is_staff(season_id))',t); end loop; end $$;
