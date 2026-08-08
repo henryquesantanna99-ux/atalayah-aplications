@@ -15,6 +15,24 @@ export type TeamMastery =
 export interface Database {
   public: {
     Tables: {
+      user_product_scopes: {
+        Row: { user_id: string; product: 'main' | 'sentinela'; created_at: string }
+        Insert: { user_id: string; product: 'main' | 'sentinela'; created_at?: string }
+        Update: never
+        Relationships: []
+      }
+      sentinela_profiles: {
+        Row: { user_id: string; display_name: string | null; created_at: string; updated_at: string }
+        Insert: { user_id: string; display_name?: string | null; created_at?: string; updated_at?: string }
+        Update: { display_name?: string | null; updated_at?: string }
+        Relationships: []
+      }
+      sentinela_onboarding: {
+        Row: { user_id: string; state: 'profile' | 'preferences' | 'complete'; created_at: string; updated_at: string }
+        Insert: { user_id: string; state?: 'profile' | 'preferences' | 'complete'; created_at?: string; updated_at?: string }
+        Update: { state?: 'profile' | 'preferences' | 'complete'; updated_at?: string }
+        Relationships: []
+      }
       profiles: {
         Row: {
           id: string
@@ -806,7 +824,16 @@ export interface Database {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      complete_sentinela_signup: {
+        Args: Record<PropertyKey, never>
+        Returns: { product: string; onboarding_state: string }[]
+      }
+      save_event_scale: {
+        Args: { p_event_id: string | null; p_event: Json; p_members: Json; p_songs: Json }
+        Returns: string
+      }
+    }
     Enums: {
       repertoire_status: 'draft' | 'consolidated' | 'archived'
       repertoire_mastery: 'low' | 'medium' | 'high'
