@@ -1,0 +1,3 @@
+import { ModuleHeader } from '../../_components/module-shell'
+import { GraduationCap } from 'lucide-react'
+export default function Page() { return <><ModuleHeader eyebrow="Formação" title="Academia" description="Conteúdos curtos e práticas profundas para formar raízes que permanecem."/><div className="grid gap-4 md:grid-cols-3">{['Fundamentos da fé','Inteligência relacional','Liderança que serve'].map((title,i)=><article key={title} className="sentinela-card rounded-2xl p-6"><GraduationCap className="text-amber-300"/><p className="mt-8 text-xs text-slate-500">TRILHA {i+1}</p><h2 className="mt-2 text-lg">{title}</h2><div className="mt-5 h-1 rounded bg-white/10"><div className="h-full bg-blue-300" style={{width:`${25+i*20}%`}}/></div></article>)}</div></> }

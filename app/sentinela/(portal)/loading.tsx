@@ -1,0 +1,1 @@
+export default function Loading() { return <main className="animate-pulse space-y-5" aria-busy="true" aria-label="Carregando módulo"><div className="h-8 w-56 rounded bg-white/10"/><div className="grid gap-4 md:grid-cols-3">{[1,2,3].map((n) => <div key={n} className="h-44 rounded-2xl bg-white/5"/>)}</div></main> }

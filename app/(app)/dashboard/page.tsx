@@ -51,7 +51,7 @@ async function DashboardContent() {
     nextEvent
       ? supabase
           .from('setlist_songs')
-          .select('*, profiles(id, full_name)')
+          .select('*')
           .eq('event_id', nextEvent.id)
           .order('order_index')
           .limit(6)
@@ -70,7 +70,27 @@ async function DashboardContent() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eventMembers = (eventMembersResult.data ?? []) as any[]
-  const setlistSongs = setlistResult.data ?? []
+  const setlistRows = setlistResult.data ?? []
+  const soloistIds = Array.from(
+    new Set(
+      setlistRows
+        .map((song) => song.soloist_id)
+        .filter((id): id is string => Boolean(id))
+    )
+  )
+  const { data: soloists } = soloistIds.length
+    ? await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', soloistIds)
+    : { data: [] }
+  const soloistsById = new Map(
+    (soloists ?? []).map((profile) => [profile.id, profile] as const)
+  )
+  const setlistSongs = setlistRows.map((song) => ({
+    ...song,
+    profiles: song.soloist_id ? soloistsById.get(song.soloist_id) ?? null : null,
+  }))
   const laiaMessage = laiaMessageResult.data?.content ?? null
 
   return (
