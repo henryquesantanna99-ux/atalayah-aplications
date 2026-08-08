@@ -3,8 +3,16 @@ import type { NextRequest } from 'next/server'
 import { createMiddlewareClient } from '@/lib/supabase/middleware'
 
 const PUBLIC_PAGE_ROUTES = ['/', '/louvor', '/inscricao']
-const AUTH_ROUTES = ['/login', '/auth/callback', '/auth/error']
-const SENTINELA_PUBLIC_ROUTES = ['/sentinela/login', '/sentinela/criar-conta', '/sentinela/auth/callback', '/sentinela/recuperar-senha', '/sentinela/redefinir-senha']
+const AUTH_ROUTES = [
+  '/login',
+  '/auth/callback',
+  '/auth/error',
+  '/sentinela/entrar',
+  '/sentinela/criar-conta',
+  '/sentinela/esqueci-senha',
+  '/sentinela/redefinir-senha',
+  '/sentinela/onboarding',
+]
 
 function isPublicInscricaoApi(pathname: string) {
   return /^\/api\/inscricoes\/[^/]+\/(status|pix)$/.test(pathname)
@@ -44,7 +52,8 @@ export async function middleware(request: NextRequest) {
 
   // Not authenticated → redirect to login (except public routes)
   if (!user && !publicRoute) {
-    return NextResponse.redirect(new URL(pathname.startsWith('/sentinela/') ? '/sentinela/login' : '/login', request.url))
+    const loginPath = pathname.startsWith('/sentinela') ? '/sentinela/entrar' : '/login'
+    return NextResponse.redirect(new URL(loginPath, request.url))
   }
 
   // Authenticated on login page → redirect to dashboard
