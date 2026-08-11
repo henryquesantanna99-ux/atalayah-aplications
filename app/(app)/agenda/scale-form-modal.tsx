@@ -172,6 +172,16 @@ export function ScaleFormModal({
           soloistId: song.soloistId || null,
           keyNote: song.keyNote || null,
           referenceLink: song.referenceLink.trim() || null,
+          youtubeVideoId: null,
+          youtubeUrl: song.referenceLink.trim() || null,
+          youtubeThumbnail: null,
+          youtubeDuration: null,
+          lyricsPlain: null,
+          lyricsSynced: null,
+          albumName: null,
+          bpm: null,
+          metadataSource: null,
+          metadataPayload: {},
         })),
       })
       toast.success('Escala criada.')

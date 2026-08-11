@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { createScale } from './actions'
 import type { ScheduleFunctionOption } from '@/lib/schedule-functions'
+import type { Json } from '@/types/database'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
@@ -103,6 +104,9 @@ interface EventSongDraft {
   lyricsPlain: string | null
   lyricsSynced: string | null
   albumName: string | null
+  bpm: number | null
+  metadataSource: string | null
+  metadataPayload: Json
   lrclibId: number | null
 }
 
@@ -119,6 +123,9 @@ interface MusicResolveResult {
   lyricsPlain?: string | null
   lyricsSynced?: string | null
   albumName?: string | null
+  bpm?: number | null
+  metadataSource?: string | null
+  metadataPayload?: Json
   lrclibId?: number | null
 }
 
@@ -167,6 +174,9 @@ function newSongDraft(): EventSongDraft {
     lyricsPlain: null,
     lyricsSynced: null,
     albumName: null,
+    bpm: null,
+    metadataSource: null,
+    metadataPayload: {},
     lrclibId: null,
   }
 }
@@ -291,6 +301,9 @@ export function EventFormModal({
       lyricsPlain: result.lyricsPlain ?? null,
       lyricsSynced: result.lyricsSynced ?? null,
       albumName: result.albumName ?? null,
+      bpm: result.bpm ?? null,
+      metadataSource: result.metadataSource ?? (result.source === 'youtube' ? 'youtube' : null),
+      metadataPayload: result.metadataPayload ?? (result.lrclibId ? { lrclibId: result.lrclibId } : {}),
       lrclibId: result.lrclibId ?? null,
     } : song))
     setMusicSearches((current) => ({ ...current, [draftId]: { status: 'idle', results: [] } }))
@@ -368,6 +381,9 @@ export function EventFormModal({
             lyricsPlain: null,
             lyricsSynced: null,
             albumName: null,
+            bpm: null,
+            metadataSource: null,
+            metadataPayload: {},
             lrclibId: null,
           }))
         : [newSongDraft()])
@@ -441,6 +457,16 @@ export function EventFormModal({
           moment: s.moment || null,
           version: s.version || null,
           referenceLink: s.youtubeUrl || null,
+          youtubeVideoId: s.youtubeVideoId,
+          youtubeUrl: s.youtubeUrl || null,
+          youtubeThumbnail: s.youtubeThumbnail,
+          youtubeDuration: s.youtubeDuration,
+          lyricsPlain: s.lyricsPlain,
+          lyricsSynced: s.lyricsSynced,
+          albumName: s.albumName,
+          bpm: s.bpm,
+          metadataSource: s.metadataSource,
+          metadataPayload: s.metadataPayload,
         })),
       })
       toast.success(isEditing ? 'Evento atualizado com sucesso.' : 'Evento criado com sucesso.')

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit } from '@/lib/permissions'
+import type { Json } from '@/types/database'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
@@ -132,6 +133,16 @@ export async function createScale(input: {
     moment?: string | null
     version?: string | null
     referenceLink: string | null
+    youtubeVideoId: string | null
+    youtubeUrl: string | null
+    youtubeThumbnail: string | null
+    youtubeDuration: string | null
+    lyricsPlain: string | null
+    lyricsSynced: string | null
+    albumName: string | null
+    bpm: number | null
+    metadataSource: string | null
+    metadataPayload: Json
   }[]
 }) {
   const validSongs = input.songs.filter((song) => song.songTitle.trim())
