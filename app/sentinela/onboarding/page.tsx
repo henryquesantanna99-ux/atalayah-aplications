@@ -1,3 +1,11 @@
-export default function SentinelaOnboardingPage() {
-  return <main className="min-h-screen bg-slate-950 text-white grid place-items-center p-6"><section className="max-w-lg text-center"><h1 className="text-3xl font-semibold">Bem-vindo ao Sentinela</h1><p className="mt-3 text-slate-300">Sua conta está pronta. Vamos configurar seu perfil.</p></section></main>
+import { getSentinelaContext } from '../_lib/data'
+import { OnboardingClient } from './onboarding-client'
+
+export default async function SentinelaOnboardingPage() {
+  const { supabase, membership } = await getSentinelaContext()
+  const [{ data: onboarding }, { data: avatar }] = await Promise.all([
+    supabase.from('sentinela_onboarding').select('*').eq('membership_id', membership.id).maybeSingle(),
+    supabase.from('sentinela_avatars').select('*').eq('membership_id', membership.id).maybeSingle(),
+  ])
+  return <OnboardingClient initialAnswers={onboarding?.answers ?? {}} initialAvatar={avatar?.configuration ?? {}} completed={onboarding?.status === 'completed'}/>
 }
