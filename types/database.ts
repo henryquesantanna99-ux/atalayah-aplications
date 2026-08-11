@@ -15,6 +15,24 @@ export type TeamMastery =
 export interface Database {
   public: {
     Tables: {
+      user_product_scopes: {
+        Row: { user_id: string; product: 'main' | 'sentinela'; created_at: string }
+        Insert: { user_id: string; product: 'main' | 'sentinela'; created_at?: string }
+        Update: never
+        Relationships: []
+      }
+      sentinela_profiles: {
+        Row: { user_id: string; display_name: string | null; created_at: string; updated_at: string }
+        Insert: { user_id: string; display_name?: string | null; created_at?: string; updated_at?: string }
+        Update: { display_name?: string | null; updated_at?: string }
+        Relationships: []
+      }
+      sentinela_onboarding: {
+        Row: { user_id: string; state: 'profile' | 'preferences' | 'complete'; created_at: string; updated_at: string }
+        Insert: { user_id: string; state?: 'profile' | 'preferences' | 'complete'; created_at?: string; updated_at?: string }
+        Update: { state?: 'profile' | 'preferences' | 'complete'; updated_at?: string }
+        Relationships: []
+      }
       profiles: {
         Row: {
           id: string
@@ -78,7 +96,9 @@ export interface Database {
           instruments?: string[]
           is_active?: boolean
         }
-        Relationships: []
+        Relationships: [
+          { foreignKeyName: 'team_members_profile_id_fkey'; columns: ['profile_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] }
+        ]
       }
       events: {
         Row: {
@@ -161,7 +181,11 @@ export interface Database {
           confirmed?: boolean
           confirmed_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          { foreignKeyName: 'event_members_event_id_fkey'; columns: ['event_id']; referencedRelation: 'events'; referencedColumns: ['id'] },
+          { foreignKeyName: 'event_members_profile_id_fkey'; columns: ['profile_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+          { foreignKeyName: 'event_members_schedule_function_id_fkey'; columns: ['schedule_function_id']; referencedRelation: 'schedule_functions'; referencedColumns: ['id'] }
+        ]
       }
       schedule_functions: {
         Row: {
@@ -237,7 +261,11 @@ export interface Database {
           moment?: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          { foreignKeyName: 'setlist_songs_event_id_fkey'; columns: ['event_id']; referencedRelation: 'events'; referencedColumns: ['id'] },
+          { foreignKeyName: 'setlist_songs_song_id_fkey'; columns: ['song_id']; referencedRelation: 'songs'; referencedColumns: ['id'] },
+          { foreignKeyName: 'setlist_songs_soloist_id_fkey'; columns: ['soloist_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] }
+        ]
       }
       repertoires: {
         Row: {
@@ -806,7 +834,16 @@ export interface Database {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      complete_sentinela_signup: {
+        Args: Record<PropertyKey, never>
+        Returns: { product: string; onboarding_state: string }[]
+      }
+      save_event_scale: {
+        Args: { p_event_id: string | null; p_event: Json; p_members: Json; p_songs: Json }
+        Returns: string
+      }
+    }
     Enums: {
       repertoire_status: 'draft' | 'consolidated' | 'archived'
       repertoire_mastery: 'low' | 'medium' | 'high'
