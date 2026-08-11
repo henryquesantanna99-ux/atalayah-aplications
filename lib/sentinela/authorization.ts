@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
-import { canManageRehearsals, type SentinelaGrant, type SentinelaRole } from './permissions'
+import { canManageRehearsals, type SentinelaRole } from './permissions'
 
 export class SentinelaAuthorizationError extends Error {
   constructor(message: string, readonly status: 401 | 403 | 404 = 403) {
