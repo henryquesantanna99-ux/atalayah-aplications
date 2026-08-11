@@ -150,7 +150,9 @@ export interface Database {
           instruments?: string[]
           is_active?: boolean
         }
-        Relationships: []
+        Relationships: [
+          { foreignKeyName: 'team_members_profile_id_fkey'; columns: ['profile_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] }
+        ]
       }
       events: {
         Row: {
@@ -234,27 +236,9 @@ export interface Database {
           confirmed_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: 'event_members_event_id_fkey'
-            columns: ['event_id']
-            isOneToOne: false
-            referencedRelation: 'events'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'event_members_profile_id_fkey'
-            columns: ['profile_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'event_members_schedule_function_id_fkey'
-            columns: ['schedule_function_id']
-            isOneToOne: false
-            referencedRelation: 'schedule_functions'
-            referencedColumns: ['id']
-          },
+          { foreignKeyName: 'event_members_event_id_fkey'; columns: ['event_id']; referencedRelation: 'events'; referencedColumns: ['id'] },
+          { foreignKeyName: 'event_members_profile_id_fkey'; columns: ['profile_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] },
+          { foreignKeyName: 'event_members_schedule_function_id_fkey'; columns: ['schedule_function_id']; referencedRelation: 'schedule_functions'; referencedColumns: ['id'] }
         ]
       }
       schedule_functions: {
@@ -331,7 +315,11 @@ export interface Database {
           moment?: 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          { foreignKeyName: 'setlist_songs_event_id_fkey'; columns: ['event_id']; referencedRelation: 'events'; referencedColumns: ['id'] },
+          { foreignKeyName: 'setlist_songs_song_id_fkey'; columns: ['song_id']; referencedRelation: 'songs'; referencedColumns: ['id'] },
+          { foreignKeyName: 'setlist_songs_soloist_id_fkey'; columns: ['soloist_id']; referencedRelation: 'profiles'; referencedColumns: ['id'] }
+        ]
       }
       repertoires: {
         Row: {
