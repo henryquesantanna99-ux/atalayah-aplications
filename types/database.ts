@@ -456,6 +456,8 @@ export interface Database {
           id: string
           title: string
           artist: string | null
+          normalized_title: string
+          normalized_artist: string
           team_mastery: TeamMastery
           youtube_video_id: string | null
           youtube_url: string | null
@@ -478,6 +480,8 @@ export interface Database {
           id?: string
           title: string
           artist?: string | null
+          normalized_title?: never
+          normalized_artist?: never
           team_mastery?: TeamMastery
           youtube_video_id?: string | null
           youtube_url?: string | null
@@ -499,6 +503,8 @@ export interface Database {
         Update: {
           title?: string
           artist?: string | null
+          normalized_title?: never
+          normalized_artist?: never
           team_mastery?: TeamMastery
           youtube_video_id?: string | null
           youtube_url?: string | null
