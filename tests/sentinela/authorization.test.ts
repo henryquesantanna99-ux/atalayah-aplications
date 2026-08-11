@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { canManageRehearsals } from '../../lib/sentinela/permissions.ts'
 
-const migration = readFileSync('supabase/migrations/042_sentinela_season_authorization.sql', 'utf8')
+const migration = readFileSync('supabase/migrations/043_sentinela_season_authorization.sql', 'utf8')
 
 test('mentor permissions are explicit and do not imply administration', () => {
   assert.equal(canManageRehearsals({ role: 'mentor', grants: [] }), false)
