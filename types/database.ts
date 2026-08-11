@@ -458,6 +458,7 @@ export interface Database {
           artist: string | null
           normalized_title: string
           normalized_artist: string
+          is_catalog_visible: boolean
           team_mastery: TeamMastery
           youtube_video_id: string | null
           youtube_url: string | null
@@ -482,6 +483,7 @@ export interface Database {
           artist?: string | null
           normalized_title?: never
           normalized_artist?: never
+          is_catalog_visible?: boolean
           team_mastery?: TeamMastery
           youtube_video_id?: string | null
           youtube_url?: string | null
@@ -505,6 +507,7 @@ export interface Database {
           artist?: string | null
           normalized_title?: never
           normalized_artist?: never
+          is_catalog_visible?: boolean
           team_mastery?: TeamMastery
           youtube_video_id?: string | null
           youtube_url?: string | null

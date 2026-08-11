@@ -108,6 +108,8 @@ interface EventSongDraft {
   metadataSource: string | null
   metadataPayload: Json
   lrclibId: number | null
+  addToGeneralCatalog: boolean
+  isFromGeneralCatalog: boolean
 }
 
 interface MusicResolveResult {
@@ -178,6 +180,8 @@ function newSongDraft(): EventSongDraft {
     metadataSource: null,
     metadataPayload: {},
     lrclibId: null,
+    addToGeneralCatalog: false,
+    isFromGeneralCatalog: false,
   }
 }
 
@@ -230,11 +234,13 @@ export function EventFormModal({
     const [{ data: variationsData }, { data: songsData }] = await Promise.all([
       supabase
         .from('song_variations')
-        .select('id, song_id, songs(title, artist), key_note, moment, soloist_id, version, youtube_url')
+        .select('id, song_id, songs!inner(title, artist, is_catalog_visible), key_note, moment, soloist_id, version, youtube_url')
+        .eq('songs.is_catalog_visible', true)
         .order('created_at', { ascending: false }),
       supabase
         .from('songs')
         .select('id, title, artist, youtube_url, created_at, song_stems(id, stem_type, original_file_name)')
+        .eq('is_catalog_visible', true)
         .order('created_at', { ascending: false }),
     ])
 
@@ -278,11 +284,13 @@ export function EventFormModal({
         soloistId: variation.soloist_id ?? '',
         version: variation.version ?? '',
         youtubeUrl: variation.youtube_url ?? '',
+        addToGeneralCatalog: true,
+        isFromGeneralCatalog: true,
       },
     ])
   }
 
-  function updateSongField(id: string, field: keyof EventSongDraft, value: string) {
+  function updateSongField(id: string, field: keyof EventSongDraft, value: string | boolean) {
     setSongs((prev) => prev.map((s) => s.id === id ? { ...s, [field]: value } : s))
   }
 
@@ -305,6 +313,8 @@ export function EventFormModal({
       metadataSource: result.metadataSource ?? (result.source === 'youtube' ? 'youtube' : null),
       metadataPayload: result.metadataPayload ?? (result.lrclibId ? { lrclibId: result.lrclibId } : {}),
       lrclibId: result.lrclibId ?? null,
+      addToGeneralCatalog: result.source === 'catalog' ? true : song.addToGeneralCatalog,
+      isFromGeneralCatalog: result.source === 'catalog',
     } : song))
     setMusicSearches((current) => ({ ...current, [draftId]: { status: 'idle', results: [] } }))
   }
@@ -350,7 +360,7 @@ export function EventFormModal({
         supabase.from('event_members').select('profile_id, instrument, schedule_function_id').eq('event_id', event.id),
         supabase
           .from('setlist_songs')
-          .select('id, song_id, song_title, artist, key_note, moment, soloist_id, version, reference_link, order_index')
+          .select('id, song_id, song_title, artist, key_note, moment, soloist_id, version, reference_link, order_index, songs(is_catalog_visible)')
           .eq('event_id', event.id)
           .order('order_index'),
         supabase.from('schedule_functions').select('id, display_name, category, is_active').eq('is_active', true).order('display_name'),
@@ -385,6 +395,8 @@ export function EventFormModal({
             metadataSource: null,
             metadataPayload: {},
             lrclibId: null,
+            addToGeneralCatalog: row.songs?.is_catalog_visible ?? false,
+            isFromGeneralCatalog: row.songs?.is_catalog_visible ?? false,
           }))
         : [newSongDraft()])
     } catch (error) {
@@ -467,6 +479,7 @@ export function EventFormModal({
           bpm: s.bpm,
           metadataSource: s.metadataSource,
           metadataPayload: s.metadataPayload,
+          addToGeneralCatalog: s.addToGeneralCatalog,
         })),
       })
       toast.success(isEditing ? 'Evento atualizado com sucesso.' : 'Evento criado com sucesso.')
@@ -661,6 +674,21 @@ export function EventFormModal({
                     <div className="max-h-[430px] space-y-3 overflow-y-auto pr-1">
                       {songs.map((draft, index) => (
                         <div key={draft.id} className="space-y-3 rounded-card border border-white/[0.06] bg-navy-900 p-3">
+                          <label className={`inline-flex items-center gap-2 rounded-card border px-2 py-1.5 text-[11px] transition-colors ${
+                            draft.addToGeneralCatalog
+                              ? 'border-brand/40 bg-brand/15 text-cyan-200'
+                              : 'border-white/[0.08] text-[#94A3B8] hover:border-white/20'
+                          } ${draft.isFromGeneralCatalog ? 'cursor-default opacity-80' : 'cursor-pointer'}`}>
+                            <input
+                              type="checkbox"
+                              checked={draft.addToGeneralCatalog}
+                              disabled={draft.isFromGeneralCatalog}
+                              onChange={(event) => updateSongField(draft.id, 'addToGeneralCatalog', event.target.checked)}
+                              className="h-3.5 w-3.5 rounded border-white/[0.08] accent-brand"
+                            />
+                            <span>Adicionar ao setlist geral</span>
+                            {draft.addToGeneralCatalog && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+                          </label>
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium text-[#94A3B8]">{index + 1}. {draft.title || 'Nova música'}</span>
                             <button type="button" onClick={() => setSongs((current) => current.filter((song) => song.id !== draft.id))} className="rounded p-1 text-[#64748B] hover:bg-red-400/10 hover:text-red-400" aria-label="Remover música"><Trash2 className="h-3.5 w-3.5" /></button>

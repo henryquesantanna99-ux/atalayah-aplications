@@ -182,6 +182,7 @@ export function ScaleFormModal({
           bpm: null,
           metadataSource: null,
           metadataPayload: {},
+          addToGeneralCatalog: false,
         })),
       })
       toast.success('Escala criada.')

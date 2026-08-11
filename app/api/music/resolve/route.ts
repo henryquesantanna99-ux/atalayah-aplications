@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from('songs')
     .select('id, title, artist, youtube_url, youtube_video_id, youtube_thumbnail, youtube_duration, lyrics_plain')
+    .eq('is_catalog_visible', true)
     .limit(200)
   if (error) return NextResponse.json({ error: 'Não foi possível consultar o catálogo.' }, { status: 500 })
 

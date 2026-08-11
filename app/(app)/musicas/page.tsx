@@ -21,11 +21,13 @@ export default async function MusicasPage() {
   const [{ data: variationsData }, { data: songsData }] = await Promise.all([
     supabase
       .from('song_variations')
-      .select('*, songs(id, title, artist, team_mastery, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload), profiles(id, full_name)')
+      .select('*, songs!inner(id, title, artist, team_mastery, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload, is_catalog_visible), profiles(id, full_name)')
+      .eq('songs.is_catalog_visible', true)
       .order('created_at', { ascending: false }),
     supabase
       .from('songs')
       .select('id, title, artist, team_mastery, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload, created_at, song_stems(id, stem_type, original_file_name)')
+      .eq('is_catalog_visible', true)
       .order('created_at', { ascending: false }),
   ])
 
