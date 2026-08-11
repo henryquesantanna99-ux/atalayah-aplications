@@ -23,7 +23,7 @@ type SentinelaRecord = {
 
 type SentinelaTables = {
   sentinela_seasons: SentinelaTable<Omit<SentinelaRecord, 'season_id'> & { name: string; slug: string; starts_on: string; ends_on: string; status: 'draft' | 'published' | 'active' | 'completed' | 'archived'; is_public: boolean; created_by: string | null }>
-  sentinela_memberships: SentinelaTable<SentinelaRecord & { user_id: string; role: 'participant' | 'mentor' | 'journey_admin'; status: 'invited' | 'active' | 'paused' | 'completed' | 'removed'; joined_at: string | null }>
+  sentinela_memberships: SentinelaTable<SentinelaRecord & { user_id: string; role: 'participant' | 'mentor' | 'journey_admin'; status: 'invited' | 'active' | 'paused' | 'completed' | 'removed'; grants: ('manage_rehearsals')[]; joined_at: string | null }>
   sentinela_phases: SentinelaTable<SentinelaRecord & { name: string; position: number; starts_on: string | null; ends_on: string | null; description: string | null; status: 'draft' | 'published' | 'completed' }>
   sentinela_weeks: SentinelaTable<SentinelaRecord & { phase_id: string; week_number: number; title: string; starts_on: string; ends_on: string; status: 'draft' | 'published' | 'completed' }>
   sentinela_milestones: SentinelaTable<SentinelaRecord & { name: string; description: string | null; position: number; status: 'draft' | 'published' | 'archived' }>

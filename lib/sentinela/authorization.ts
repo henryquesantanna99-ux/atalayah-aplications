@@ -22,7 +22,7 @@ export async function loadSentinelaScope(seasonId?: string) {
 
   const { data: membership } = await supabase
     .from('sentinela_memberships')
-    .select('id, season_id, user_id, role')
+    .select('id, season_id, user_id, role, grants')
     .eq('season_id', season.id)
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -37,7 +37,7 @@ export async function loadSentinelaScope(seasonId?: string) {
     membership: {
       ...membership,
       role: membership.role as SentinelaRole,
-      grants: [],
+      grants: membership.grants,
     },
   }
 }
