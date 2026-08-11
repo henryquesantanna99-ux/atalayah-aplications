@@ -12,17 +12,36 @@ const text = (data: FormData, key: string, required = true) => {
   return value
 }
 
-function validatedInput(input: RehearsalInput) {
-  const title = input.title.trim()
-  if (!title || !Number.isFinite(Date.parse(input.scheduledAt))) throw new Error('Dados do ensaio inválidos.')
-  return { title, starts_at: input.scheduledAt, notes: input.privateNotes?.trim() || null }
+export type RehearsalInput = {
+  seasonId: string
+  title: string
+  scheduledAt: string
+  privateNotes?: string | null
 }
 
-export async function createRehearsal(input: RehearsalInput) {
-  const { supabase, season } = await requireRehearsalManager(input.seasonId)
-  const { error } = await supabase.from('sentinela_rehearsals').insert({
-    ...validatedInput(input), season_id: season.id,
-  })
+function validateRehearsalInput(input: RehearsalInput) {
+  const title = input.title.trim()
+  if (!title || !Number.isFinite(Date.parse(input.scheduledAt))) {
+    throw new Error('Dados do ensaio inválidos.')
+  }
+
+  return {
+    title,
+    starts_at: input.scheduledAt,
+    notes: input.privateNotes?.trim() || null,
+  }
+}
+
+export async function saveJournalEntry(data: FormData) {
+  const { supabase, membership, season } = await getSentinelaContext()
+  const { error } = await supabase.from('sentinela_journal_entries').insert({ season_id: season.id, membership_id: membership.id, title: text(data, 'title', false) || null, body: text(data, 'body') })
+  if (error) throw new Error(error.message)
+  revalidatePath('/sentinela/diario')
+}
+
+export async function saveAvatar(configuration: Json, isPublic = false) {
+  const { supabase, membership, season } = await getSentinelaContext()
+  const { error } = await supabase.from('sentinela_avatars').upsert({ season_id: season.id, membership_id: membership.id, configuration, is_public: isPublic }, { onConflict: 'membership_id' })
   if (error) throw new Error(error.message)
   revalidatePath('/sentinela/perfil')
 }
@@ -90,8 +109,38 @@ export async function reviewCheckpoint(data: FormData) {
   revalidatePath('/sentinela/admin/avaliacoes')
 }
 
-export async function createRehearsal(input: { seasonId: string; title: string; scheduledAt: string; privateNotes?: string | null }) {
+export async function createRehearsal(input: RehearsalInput) {
   const { supabase, season } = await requireRehearsalManager(input.seasonId)
-  const { error } = await supabase.from('sentinela_rehearsals').insert({ season_id: season.id, title: input.title.trim(), starts_at: input.scheduledAt, notes: input.privateNotes?.trim() || null })
-  if (error) throw new Error(error.message); revalidatePath('/sentinela/ensaios')
+  const { error } = await supabase.from('sentinela_rehearsals').insert({
+    ...validateRehearsalInput(input),
+    season_id: season.id,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath('/sentinela/ensaios')
+}
+
+export async function updateRehearsal(rehearsalId: string, input: RehearsalInput) {
+  const { supabase, season } = await requireRehearsalManager(input.seasonId)
+  const { data, error } = await supabase.from('sentinela_rehearsals')
+    .update(validateRehearsalInput(input))
+    .eq('id', rehearsalId)
+    .eq('season_id', season.id)
+    .select('id')
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Ensaio não encontrado nesta temporada.')
+  revalidatePath('/sentinela/ensaios')
+}
+
+export async function deleteRehearsal(rehearsalId: string, seasonId: string) {
+  const { supabase, season } = await requireRehearsalManager(seasonId)
+  const { data, error } = await supabase.from('sentinela_rehearsals')
+    .delete()
+    .eq('id', rehearsalId)
+    .eq('season_id', season.id)
+    .select('id')
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Ensaio não encontrado nesta temporada.')
+  revalidatePath('/sentinela/ensaios')
 }

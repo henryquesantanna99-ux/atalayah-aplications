@@ -37,7 +37,7 @@ export async function loadSentinelaScope(seasonId?: string) {
     membership: {
       ...membership,
       role: membership.role as SentinelaRole,
-      grants: [] as SentinelaGrant[],
+      grants: [],
     },
   }
 }
