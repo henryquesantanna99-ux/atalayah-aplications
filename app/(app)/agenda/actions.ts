@@ -143,6 +143,7 @@ export async function createScale(input: {
     bpm: number | null
     metadataSource: string | null
     metadataPayload: Json
+    addToGeneralCatalog: boolean
   }[]
 }) {
   const validSongs = input.songs.filter((song) => song.songTitle.trim())
