@@ -59,6 +59,35 @@ export async function saveOnboarding(payload: { answers: Json; avatar: Json; com
   revalidatePath('/sentinela/onboarding')
 }
 
+export async function saveDiagnostic(data: FormData) {
+  const { supabase, membership, season } = await getSentinelaContext()
+  const kind = text(data, 'kind') as 'baseline' | 'final'
+  if (!['baseline', 'final'].includes(kind)) throw new Error('Tipo de diagnóstico inválido.')
+  let responses: Json
+  try { responses = JSON.parse(text(data, 'responses')) as Json } catch { throw new Error('Respostas do diagnóstico inválidas.') }
+  const submitted = data.get('submitted') === 'true'
+  const { error } = await supabase.from('sentinela_diagnostics').upsert({
+    season_id: season.id, membership_id: membership.id, kind, responses,
+    submitted_at: submitted ? new Date().toISOString() : null,
+  }, { onConflict: 'membership_id,kind' })
+  if (error) throw new Error(error.message)
+  revalidatePath('/sentinela/perfil')
+  revalidatePath('/sentinela/onboarding')
+}
+
+export async function saveSelfAssessment(data: FormData) {
+  const { supabase, membership, season } = await getSentinelaContext()
+  const milestoneId = text(data, 'milestoneId')
+  let assessment: Json
+  try { assessment = JSON.parse(text(data, 'assessment')) as Json } catch { throw new Error('Autoavaliação inválida.') }
+  const existing = await supabase.from('sentinela_competency_progress').select('id').eq('season_id', season.id).eq('membership_id', membership.id).eq('milestone_id', milestoneId).maybeSingle()
+  const result = existing.data
+    ? await supabase.from('sentinela_competency_progress').update({ self_assessment: assessment }).eq('id', existing.data.id).eq('season_id', season.id)
+    : await supabase.from('sentinela_competency_progress').insert({ season_id: season.id, membership_id: membership.id, milestone_id: milestoneId, self_assessment: assessment })
+  if (result.error) throw new Error(result.error.message)
+  revalidatePath('/sentinela/jornada')
+}
+
 export async function saveLessonProgress(data: FormData) {
   const { supabase, membership, season } = await getSentinelaContext()
   const lessonId = text(data, 'lessonId'); const percent = Math.max(0, Math.min(100, Number(data.get('progress')) || 0))
