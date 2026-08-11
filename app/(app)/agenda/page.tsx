@@ -33,13 +33,42 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
     .lte('date', endDate)
     .order('date')
 
-  const { data: editorProfiles } = isEditor
-    ? await supabase
-        .from('profiles')
-        .select('id, full_name, team_members(teams, instruments, function_role)')
-        .eq('status', 'active')
-        .order('full_name')
-    : { data: [] }
+  let editorProfiles: ProfileOption[] = []
+
+  if (isEditor) {
+    // Keep these as two typed queries. The generated database types do not expose
+    // a profiles -> team_members relationship, so an embedded select is inferred
+    // as SelectQueryError during production type-checking.
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('status', 'active')
+      .order('full_name')
+
+    const profileIds = (profiles ?? []).map((profile) => profile.id)
+    const { data: memberships } = profileIds.length
+      ? await supabase
+          .from('team_members')
+          .select('profile_id, teams, instruments, function_role')
+          .in('profile_id', profileIds)
+      : { data: [] }
+
+    const membershipsByProfile = new Map<string, ProfileOption['team_members']>()
+    for (const membership of memberships ?? []) {
+      const current = membershipsByProfile.get(membership.profile_id) ?? []
+      current.push({
+        teams: membership.teams,
+        instruments: membership.instruments,
+        function_role: membership.function_role,
+      })
+      membershipsByProfile.set(membership.profile_id, current)
+    }
+
+    editorProfiles = (profiles ?? []).map((profile) => ({
+      ...profile,
+      team_members: membershipsByProfile.get(profile.id) ?? [],
+    }))
+  }
 
   return (
     <>
@@ -48,7 +77,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
         subtitle="Visualize e gerencie os eventos do ministério"
         actions={
           isEditor ? (
-            <EventFormModal profiles={(editorProfiles ?? []) as ProfileOption[]} />
+            <EventFormModal profiles={editorProfiles} />
           ) : undefined
         }
       />
