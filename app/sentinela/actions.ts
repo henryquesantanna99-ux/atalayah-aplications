@@ -13,13 +13,13 @@ type RehearsalInput = {
 function validatedInput(input: RehearsalInput) {
   const title = input.title.trim()
   if (!title || !Number.isFinite(Date.parse(input.scheduledAt))) throw new Error('Dados do ensaio inválidos.')
-  return { title, scheduled_at: input.scheduledAt, private_notes: input.privateNotes?.trim() || null }
+  return { title, starts_at: input.scheduledAt, notes: input.privateNotes?.trim() || null }
 }
 
 export async function createRehearsal(input: RehearsalInput) {
-  const { supabase, user, season } = await requireRehearsalManager(input.seasonId)
+  const { supabase, season } = await requireRehearsalManager(input.seasonId)
   const { error } = await supabase.from('sentinela_rehearsals').insert({
-    ...validatedInput(input), season_id: season.id, created_by: user.id,
+    ...validatedInput(input), season_id: season.id,
   })
   if (error) throw new Error(error.message)
   revalidatePath('/sentinela')

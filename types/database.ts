@@ -45,7 +45,15 @@ type SentinelaTables = {
   sentinela_checkpoint_progress: SentinelaTable<SentinelaRecord & { membership_id: string; checkpoint_id: string; status: 'not_started' | 'in_progress' | 'submitted' | 'validated' | 'rejected'; validated_by: string | null; validated_at: string | null }>
   sentinela_evidence: SentinelaTable<SentinelaRecord & { membership_id: string; checkpoint_progress_id: string; requirement_id: string | null; storage_path: string; media_type: string | null; description: string | null; status: 'submitted' | 'approved' | 'rejected'; approved_by: string | null; approved_at: string | null }>
   sentinela_checkpoint_feedback: SentinelaTable<SentinelaRecord & { checkpoint_progress_id: string; author_membership_id: string; body: string; visibility: 'participant' | 'staff' }>
-  sentinela_rehearsals: SentinelaTable<SentinelaRecord & { phase_id: string | null; title: string; starts_at: string; ends_at: string | null; location: string | null; notes: string | null; status: 'scheduled' | 'completed' | 'cancelled' }>
+  sentinela_rehearsals: {
+    Row: SentinelaRecord & { phase_id: string | null; title: string; starts_at: string; ends_at: string | null; location: string | null; notes: string | null; status: 'scheduled' | 'completed' | 'cancelled' }
+    Insert: { id?: string; season_id: string; phase_id?: string | null; title: string; starts_at: string; ends_at?: string | null; location?: string | null; notes?: string | null; status?: 'scheduled' | 'completed' | 'cancelled'; created_at?: string; updated_at?: string }
+    Update: { id?: string; season_id?: string; phase_id?: string | null; title?: string; starts_at?: string; ends_at?: string | null; location?: string | null; notes?: string | null; status?: 'scheduled' | 'completed' | 'cancelled'; created_at?: string; updated_at?: string }
+    Relationships: [
+      { foreignKeyName: 'sentinela_rehearsals_season_id_fkey'; columns: ['season_id']; referencedRelation: 'sentinela_seasons'; referencedColumns: ['id'] },
+      { foreignKeyName: 'sentinela_rehearsals_season_id_phase_id_fkey'; columns: ['season_id', 'phase_id']; referencedRelation: 'sentinela_phases'; referencedColumns: ['season_id', 'id'] },
+    ]
+  }
   sentinela_attendance: SentinelaTable<SentinelaRecord & { rehearsal_id: string; membership_id: string; status: 'expected' | 'present' | 'late' | 'absent' | 'excused'; checked_by: string | null; checked_at: string | null; notes: string | null }>
   sentinela_repertoire: SentinelaTable<SentinelaRecord & { title: string; artist: string | null; reference_url: string | null; status: 'active' | 'archived'; metadata: Json }>
   sentinela_rehearsal_repertoire: SentinelaTable<{ rehearsal_id: string; repertoire_id: string; position: number; notes: string | null; created_at: string }>
@@ -56,7 +64,14 @@ type SentinelaTables = {
   sentinela_privileges: SentinelaTable<SentinelaRecord & { name: string; description: string | null; configuration: Json; status: 'active' | 'archived' }>
   sentinela_privilege_grants: SentinelaTable<Omit<SentinelaRecord, 'updated_at'> & { membership_id: string; privilege_id: string; granted_by: string; starts_at: string; expires_at: string | null; revoked_at: string | null }>
   sentinela_avatars: SentinelaTable<SentinelaRecord & { membership_id: string; visual_asset_url: string | null; configuration: Json; is_public: boolean }>
-  sentinela_onboarding: SentinelaTable<SentinelaRecord & { membership_id: string; status: 'not_started' | 'in_progress' | 'completed'; answers: Json; completed_at: string | null }>
+  sentinela_onboarding: {
+    Row: SentinelaRecord & { membership_id: string; status: 'not_started' | 'in_progress' | 'completed'; answers: Json; completed_at: string | null }
+    Insert: { id?: string; season_id: string; membership_id: string; status?: 'not_started' | 'in_progress' | 'completed'; answers?: Json; completed_at?: string | null; created_at?: string; updated_at?: string }
+    Update: { id?: string; season_id?: string; membership_id?: string; status?: 'not_started' | 'in_progress' | 'completed'; answers?: Json; completed_at?: string | null; created_at?: string; updated_at?: string }
+    Relationships: [
+      { foreignKeyName: 'sentinela_onboarding_season_id_membership_id_fkey'; columns: ['season_id', 'membership_id']; referencedRelation: 'sentinela_memberships'; referencedColumns: ['season_id', 'id'] },
+    ]
+  }
   sentinela_diagnostics: SentinelaTable<SentinelaRecord & { membership_id: string; kind: 'baseline' | 'final'; responses: Json; submitted_at: string | null; reviewed_by: string | null; reviewed_at: string | null }>
 }
 
@@ -79,12 +94,6 @@ export interface Database {
         Row: { user_id: string; display_name: string | null; created_at: string; updated_at: string }
         Insert: { user_id: string; display_name?: string | null; created_at?: string; updated_at?: string }
         Update: { display_name?: string | null; updated_at?: string }
-        Relationships: []
-      }
-      sentinela_onboarding: {
-        Row: { user_id: string; state: 'profile' | 'preferences' | 'complete'; created_at: string; updated_at: string }
-        Insert: { user_id: string; state?: 'profile' | 'preferences' | 'complete'; created_at?: string; updated_at?: string }
-        Update: { state?: 'profile' | 'preferences' | 'complete'; updated_at?: string }
         Relationships: []
       }
       profiles: {

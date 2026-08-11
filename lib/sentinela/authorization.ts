@@ -15,14 +15,14 @@ export async function loadSentinelaScope(seasonId?: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new SentinelaAuthorizationError('Não autenticado.', 401)
 
-  let seasonQuery = supabase.from('sentinela_seasons').select('id, name, is_active')
-  seasonQuery = seasonId ? seasonQuery.eq('id', seasonId) : seasonQuery.eq('is_active', true)
+  let seasonQuery = supabase.from('sentinela_seasons').select('id, name, status')
+  seasonQuery = seasonId ? seasonQuery.eq('id', seasonId) : seasonQuery.eq('status', 'active')
   const { data: season } = await seasonQuery.maybeSingle()
   if (!season) throw new SentinelaAuthorizationError('Temporada não encontrada.', 404)
 
   const { data: membership } = await supabase
     .from('sentinela_memberships')
-    .select('id, season_id, user_id, role, grants')
+    .select('id, season_id, user_id, role')
     .eq('season_id', season.id)
     .eq('user_id', user.id)
     .eq('status', 'active')
@@ -37,7 +37,7 @@ export async function loadSentinelaScope(seasonId?: string) {
     membership: {
       ...membership,
       role: membership.role as SentinelaRole,
-      grants: membership.grants as SentinelaGrant[],
+      grants: [] as SentinelaGrant[],
     },
   }
 }
