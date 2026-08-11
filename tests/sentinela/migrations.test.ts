@@ -3,15 +3,15 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const foundation = readFileSync(
-  new URL('../../supabase/migrations/042_sentinela_program_foundation.sql', import.meta.url),
+  new URL('../../supabase/migrations/045_sentinela_program_foundation.sql', import.meta.url),
   'utf8',
 )
 const academy = readFileSync(
-  new URL('../../supabase/migrations/043_sentinela_academy_checkpoints.sql', import.meta.url),
+  new URL('../../supabase/migrations/046_sentinela_academy_checkpoints.sql', import.meta.url),
   'utf8',
 )
 const practice = readFileSync(
-  new URL('../../supabase/migrations/044_sentinela_practice_identity_storage.sql', import.meta.url),
+  new URL('../../supabase/migrations/047_sentinela_practice_identity_storage.sql', import.meta.url),
   'utf8',
 )
 const databaseTypes = readFileSync(

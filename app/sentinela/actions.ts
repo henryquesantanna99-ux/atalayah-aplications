@@ -12,16 +12,17 @@ const text = (data: FormData, key: string, required = true) => {
   return value
 }
 
-export async function saveJournalEntry(data: FormData) {
-  const { supabase, membership, season } = await getSentinelaContext()
-  const { error } = await supabase.from('sentinela_journal_entries').insert({ season_id: season.id, membership_id: membership.id, title: text(data, 'title', false) || null, body: text(data, 'body') })
-  if (error) throw new Error(error.message)
-  revalidatePath('/sentinela/diario')
+function validatedInput(input: RehearsalInput) {
+  const title = input.title.trim()
+  if (!title || !Number.isFinite(Date.parse(input.scheduledAt))) throw new Error('Dados do ensaio inválidos.')
+  return { title, starts_at: input.scheduledAt, notes: input.privateNotes?.trim() || null }
 }
 
-export async function saveAvatar(configuration: Json, isPublic = false) {
-  const { supabase, membership, season } = await getSentinelaContext()
-  const { error } = await supabase.from('sentinela_avatars').upsert({ season_id: season.id, membership_id: membership.id, configuration, is_public: isPublic }, { onConflict: 'membership_id' })
+export async function createRehearsal(input: RehearsalInput) {
+  const { supabase, season } = await requireRehearsalManager(input.seasonId)
+  const { error } = await supabase.from('sentinela_rehearsals').insert({
+    ...validatedInput(input), season_id: season.id,
+  })
   if (error) throw new Error(error.message)
   revalidatePath('/sentinela/perfil')
 }
