@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { canManageRehearsals } from '../../lib/sentinela/permissions.ts'
 
-const migration = readFileSync('supabase/migrations/043_sentinela_season_authorization.sql', 'utf8')
+const migration = readFileSync('supabase/migrations/049_sentinela_schema_correction.sql', 'utf8')
 
 test('mentor permissions are explicit and do not imply administration', () => {
   assert.equal(canManageRehearsals({ role: 'mentor', grants: [] }), false)
@@ -12,14 +12,14 @@ test('mentor permissions are explicit and do not imply administration', () => {
 })
 
 test('Sentinela roles live on season memberships, never profiles', () => {
-  assert.match(migration, /sentinela_memberships[\s\S]*role TEXT NOT NULL/)
+  assert.match(migration, /alter table public\.sentinela_memberships[\s\S]*grants text\[\]/i)
   assert.doesNotMatch(migration, /ALTER TABLE (public\.)?profiles[\s\S]*(participant|mentor|journey_admin)/)
 })
 
 test('RLS scopes private reads and writes to the target season membership', () => {
   assert.match(migration, /has_sentinela_membership\(season_id\)/)
   assert.match(migration, /can_manage_sentinela_rehearsals\(season_id\)/)
-  assert.match(migration, /season_id = target_season AND user_id = auth\.uid\(\)/)
+  assert.match(migration, /season_id = target_season and user_id = auth\.uid\(\)/i)
 })
 
 test('a mentor grant in season A grants nothing in season B', () => {
@@ -28,5 +28,5 @@ test('a mentor grant in season A grants nothing in season B', () => {
 
   assert.equal(canManageRehearsals(authorityFor('A')!), true)
   assert.equal(authorityFor('B'), undefined)
-  assert.match(migration, /WHERE season_id = target_season/)
+  assert.match(migration, /where season_id = target_season/i)
 })

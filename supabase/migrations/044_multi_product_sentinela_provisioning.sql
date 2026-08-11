@@ -15,7 +15,9 @@ create table if not exists public.sentinela_profiles (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.sentinela_onboarding (
+-- Account provisioning state is deliberately separate from the season-scoped
+-- journey onboarding created by the practice migration.
+create table if not exists public.sentinela_signup_onboarding (
   user_id uuid primary key references auth.users(id) on delete cascade,
   state text not null default 'profile' check (state in ('profile', 'preferences', 'complete')),
   created_at timestamptz not null default now(),
@@ -24,7 +26,7 @@ create table if not exists public.sentinela_onboarding (
 
 alter table public.user_product_scopes enable row level security;
 alter table public.sentinela_profiles enable row level security;
-alter table public.sentinela_onboarding enable row level security;
+alter table public.sentinela_signup_onboarding enable row level security;
 
 create policy "product_scopes_select_own" on public.user_product_scopes
   for select to authenticated using (user_id = auth.uid());
@@ -32,9 +34,9 @@ create policy "sentinela_profiles_select_own" on public.sentinela_profiles
   for select to authenticated using (user_id = auth.uid());
 create policy "sentinela_profiles_update_own" on public.sentinela_profiles
   for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-create policy "sentinela_onboarding_select_own" on public.sentinela_onboarding
+create policy "sentinela_signup_onboarding_select_own" on public.sentinela_signup_onboarding
   for select to authenticated using (user_id = auth.uid());
-create policy "sentinela_onboarding_update_own" on public.sentinela_onboarding
+create policy "sentinela_signup_onboarding_update_own" on public.sentinela_signup_onboarding
   for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- Existing main-product users retain their access during the migration.
@@ -98,14 +100,13 @@ begin
   values (caller, 'sentinela') on conflict do nothing;
   insert into public.sentinela_profiles (user_id)
   values (caller) on conflict do nothing;
-  insert into public.sentinela_onboarding (user_id, state)
+  insert into public.sentinela_signup_onboarding (user_id, state)
   values (caller, 'profile') on conflict do nothing;
 
   return query select 'sentinela'::text, so.state
-    from public.sentinela_onboarding so where so.user_id = caller;
+    from public.sentinela_signup_onboarding so where so.user_id = caller;
 end;
 $$;
 
 revoke all on function public.complete_sentinela_signup() from public;
 grant execute on function public.complete_sentinela_signup() to authenticated;
-

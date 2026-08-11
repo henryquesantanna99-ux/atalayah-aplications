@@ -14,6 +14,10 @@ const practice = readFileSync(
   new URL('../../supabase/migrations/047_sentinela_practice_identity_storage.sql', import.meta.url),
   'utf8',
 )
+const correction = readFileSync(
+  new URL('../../supabase/migrations/049_sentinela_schema_correction.sql', import.meta.url),
+  'utf8',
+)
 const databaseTypes = readFileSync(
   new URL('../../types/database.ts', import.meta.url),
   'utf8',
@@ -50,6 +54,15 @@ test('Sentinela tables are composed once into the generated database types', () 
     'sentinela_seasons must have a single type declaration',
   )
   assert.match(databaseTypes, /Tables:\s*\{[\s\S]*}\s*&\s*SentinelaTables/)
+  assert.equal(databaseTypes.match(/^\s*sentinela_onboarding:/gm)?.length, 1)
+})
+
+test('Sentinela has one canonical rehearsal and journey onboarding schema', () => {
+  const migrations = [foundation, academy, practice, correction].join('\n')
+  assert.equal(migrations.match(/create table public\.sentinela_rehearsals\s*\(/gi)?.length, 1)
+  assert.equal(migrations.match(/create table public\.sentinela_onboarding\s*\(/gi)?.length, 1)
+  assert.match(practice, /starts_at timestamptz not null/)
+  assert.doesNotMatch(practice, /scheduled_at|private_notes|created_by/)
 })
 
 test('database relationships type agenda joins without assertion casts', () => {

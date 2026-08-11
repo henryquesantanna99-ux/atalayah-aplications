@@ -15,20 +15,20 @@ const text = (data: FormData, key: string, required = true) => {
 export type RehearsalInput = {
   seasonId: string
   title: string
-  scheduledAt: string
-  privateNotes?: string | null
+  startsAt: string
+  notes?: string | null
 }
 
 function validateRehearsalInput(input: RehearsalInput) {
   const title = input.title.trim()
-  if (!title || !Number.isFinite(Date.parse(input.scheduledAt))) {
+  if (!title || !Number.isFinite(Date.parse(input.startsAt))) {
     throw new Error('Dados do ensaio inválidos.')
   }
 
   return {
     title,
-    starts_at: input.scheduledAt,
-    notes: input.privateNotes?.trim() || null,
+    starts_at: input.startsAt,
+    notes: input.notes?.trim() || null,
   }
 }
 
