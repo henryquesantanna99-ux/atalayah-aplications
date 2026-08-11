@@ -81,12 +81,6 @@ export interface Database {
         Update: { display_name?: string | null; updated_at?: string }
         Relationships: []
       }
-      sentinela_onboarding: {
-        Row: { user_id: string; state: 'profile' | 'preferences' | 'complete'; created_at: string; updated_at: string }
-        Insert: { user_id: string; state?: 'profile' | 'preferences' | 'complete'; created_at?: string; updated_at?: string }
-        Update: { state?: 'profile' | 'preferences' | 'complete'; updated_at?: string }
-        Relationships: []
-      }
       profiles: {
         Row: {
           id: string
