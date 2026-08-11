@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { CalendarPlus, Check, Music2, Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   Dialog,
@@ -96,7 +97,32 @@ interface EventSongDraft {
   soloistId: string
   version: string
   youtubeUrl: string
+  youtubeVideoId: string | null
+  youtubeThumbnail: string | null
+  youtubeDuration: string | null
+  lyricsPlain: string | null
+  lyricsSynced: string | null
+  albumName: string | null
+  lrclibId: number | null
 }
+
+interface MusicResolveResult {
+  source: 'catalog' | 'youtube'
+  songId: string | null
+  title: string
+  artist: string
+  thumbnail: string | null
+  url: string | null
+  videoId: string | null
+  duration: string | null
+  lyricsExcerpt: string | null
+  lyricsPlain?: string | null
+  lyricsSynced?: string | null
+  albumName?: string | null
+  lrclibId?: number | null
+}
+
+type MusicSearchState = { status: 'idle' | 'loading' | 'success' | 'error'; results: MusicResolveResult[]; error?: string }
 
 interface EventFormModalProps {
   event?: CalendarEvent
@@ -135,6 +161,13 @@ function newSongDraft(): EventSongDraft {
     soloistId: '',
     version: '',
     youtubeUrl: '',
+    youtubeVideoId: null,
+    youtubeThumbnail: null,
+    youtubeDuration: null,
+    lyricsPlain: null,
+    lyricsSynced: null,
+    albumName: null,
+    lrclibId: null,
   }
 }
 
@@ -157,6 +190,9 @@ export function EventFormModal({
   const [legacyAssignments, setLegacyAssignments] = useState<Record<string, string>>({})
   const [catalogLoaded, setCatalogLoaded] = useState(false)
   const [songSearchByDraft, setSongSearchByDraft] = useState<Record<string, string>>({})
+  const [musicSearches, setMusicSearches] = useState<Record<string, MusicSearchState>>({})
+  const suppressedSearches = useRef(new Set<string>())
+  const searchSequence = useRef<Record<string, number>>({})
 
   const [form, setForm] = useState(() => event
     ? {
@@ -240,6 +276,59 @@ export function EventFormModal({
     setSongs((prev) => prev.map((s) => s.id === id ? { ...s, [field]: value } : s))
   }
 
+  function confirmResolvedSong(draftId: string, result: MusicResolveResult) {
+    suppressedSearches.current.add(draftId)
+    setSongs((current) => current.map((song) => song.id === draftId ? {
+      ...song,
+      songId: result.source === 'catalog' ? result.songId : null,
+      catalogVariationId: null,
+      title: result.title,
+      artist: result.artist,
+      youtubeUrl: result.url ?? '',
+      youtubeVideoId: result.videoId,
+      youtubeThumbnail: result.thumbnail,
+      youtubeDuration: result.duration,
+      lyricsPlain: result.lyricsPlain ?? null,
+      lyricsSynced: result.lyricsSynced ?? null,
+      albumName: result.albumName ?? null,
+      lrclibId: result.lrclibId ?? null,
+    } : song))
+    setMusicSearches((current) => ({ ...current, [draftId]: { status: 'idle', results: [] } }))
+  }
+
+  useEffect(() => {
+    const controllers: AbortController[] = []
+    const timers = songs.map((draft) => {
+      if (suppressedSearches.current.delete(draft.id)) return undefined
+      const title = draft.title.trim()
+      if (title.length < 2) {
+        setMusicSearches((current) => ({ ...current, [draft.id]: { status: 'idle', results: [] } }))
+        return undefined
+      }
+      const sequence = (searchSequence.current[draft.id] ?? 0) + 1
+      searchSequence.current[draft.id] = sequence
+      const controller = new AbortController()
+      controllers.push(controller)
+      return window.setTimeout(async () => {
+        setMusicSearches((current) => ({ ...current, [draft.id]: { status: 'loading', results: current[draft.id]?.results ?? [] } }))
+        try {
+          const response = await fetch('/api/music/resolve', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, artist: draft.artist.trim() }), signal: controller.signal,
+          })
+          const payload = await response.json()
+          if (!response.ok) throw new Error(payload.error ?? 'Erro ao buscar músicas.')
+          if (searchSequence.current[draft.id] !== sequence) return
+          setMusicSearches((current) => ({ ...current, [draft.id]: { status: 'success', results: payload.results ?? [] } }))
+        } catch (error) {
+          if (controller.signal.aborted || searchSequence.current[draft.id] !== sequence) return
+          setMusicSearches((current) => ({ ...current, [draft.id]: { status: 'error', results: [], error: error instanceof Error ? error.message : 'Erro ao buscar músicas.' } }))
+        }
+      }, 450)
+    })
+    return () => { timers.forEach((timer) => timer !== undefined && window.clearTimeout(timer)); controllers.forEach((controller) => controller.abort()) }
+  }, [songs])
+
   async function loadExistingEvent() {
     if (!event) return
     setLoadingExisting(true)
@@ -273,6 +362,13 @@ export function EventFormModal({
             soloistId: row.soloist_id ?? '',
             version: row.version ?? '',
             youtubeUrl: row.reference_link ?? '',
+            youtubeVideoId: null,
+            youtubeThumbnail: null,
+            youtubeDuration: null,
+            lyricsPlain: null,
+            lyricsSynced: null,
+            albumName: null,
+            lrclibId: null,
           }))
         : [newSongDraft()])
     } catch (error) {
@@ -552,6 +648,31 @@ export function EventFormModal({
                             <input value={draft.version} onChange={(event) => updateSongField(draft.id, 'version', event.target.value)} placeholder="Versão" className={inputSmClass} />
                             <input value={draft.youtubeUrl} onChange={(event) => updateSongField(draft.id, 'youtubeUrl', event.target.value)} type="url" placeholder="Link do YouTube" className={inputSmClass} />
                           </div>
+                          {musicSearches[draft.id]?.status === 'loading' && (
+                            <p className="text-[11px] text-cyan-300" role="status">Buscando no catálogo e no YouTube…</p>
+                          )}
+                          {musicSearches[draft.id]?.status === 'error' && (
+                            <p className="text-[11px] text-red-300" role="alert">{musicSearches[draft.id].error}</p>
+                          )}
+                          {musicSearches[draft.id]?.status === 'success' && musicSearches[draft.id].results.length === 0 && (
+                            <p className="text-[11px] text-[#64748B]">Nenhum resultado encontrado.</p>
+                          )}
+                          {(musicSearches[draft.id]?.results.length ?? 0) > 0 && (
+                            <div className="space-y-2 border-t border-white/[0.06] pt-2">
+                              <p className="text-[10px] uppercase tracking-wide text-[#64748B]">Confirme uma versão</p>
+                              {musicSearches[draft.id].results.map((result) => (
+                                <div key={`${result.source}-${result.songId ?? result.videoId}`} className="flex gap-2 rounded-card border border-white/[0.06] bg-navy-800/70 p-2">
+                                  {result.thumbnail ? <Image src={result.thumbnail} alt="" width={80} height={56} unoptimized className="h-14 w-20 shrink-0 rounded object-cover" /> : <div className="flex h-14 w-20 shrink-0 items-center justify-center rounded bg-navy-900"><Music2 className="h-4 w-4 text-[#64748B]" /></div>}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-xs font-medium text-white">{result.title}</p>
+                                    <p className="truncate text-[11px] text-[#94A3B8]">{result.artist || 'Artista não informado'}</p>
+                                    {result.lyricsExcerpt && <p className="mt-1 line-clamp-2 whitespace-pre-line text-[10px] text-[#64748B]">{result.lyricsExcerpt}</p>}
+                                  </div>
+                                  <button type="button" onClick={() => confirmResolvedSong(draft.id, result)} className="h-fit shrink-0 rounded-card bg-brand px-2 py-1.5 text-[11px] font-medium text-white hover:bg-brand-light">Confirmar</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
