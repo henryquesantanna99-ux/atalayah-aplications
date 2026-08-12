@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { CalendarPlus, Check, Music2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { CalendarPlus, Check, Copy, ExternalLink, Music2, Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,9 @@ interface CalendarEvent {
   location?: string | null
   is_online?: boolean
   meet_link?: string | null
+  youtube_playlist_url?: string | null
+  youtube_playlist_sync_status?: 'not_requested' | 'pending' | 'syncing' | 'synced' | 'failed'
+  youtube_playlist_last_error?: string | null
 }
 
 export interface ProfileOption {
@@ -198,6 +201,7 @@ export function EventFormModal({
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
+  const [saveResult, setSaveResult] = useState<{ url: string | null; status: string; message: string } | null>(null)
   const [loadingExisting, setLoadingExisting] = useState(false)
   const [catalogSongs, setCatalogSongs] = useState<CatalogSong[]>([])
   const [scheduleFunctions, setScheduleFunctions] = useState<ScheduleFunctionOption[]>([])
@@ -420,6 +424,7 @@ export function EventFormModal({
       setLegacyAssignments({})
       setSongs([newSongDraft()])
       setSongSearchByDraft({})
+      setSaveResult(null)
       if (!isEditing) setForm(emptyForm)
     }
   }
@@ -455,7 +460,7 @@ export function EventFormModal({
 
     setSaving(true)
     try {
-      await createScale({
+      const result = await createScale({
         eventId: event?.id ?? null,
         event: buildPayload(),
         members,
@@ -482,8 +487,8 @@ export function EventFormModal({
           addToGeneralCatalog: s.addToGeneralCatalog,
         })),
       })
-      toast.success(isEditing ? 'Evento atualizado com sucesso.' : 'Evento criado com sucesso.')
-      handleOpenChange(false)
+      setSaveResult(result.playlist)
+      setStep(totalSteps + 1)
       router.refresh()
     } catch (err) {
       // createScale only returns allow-listed domain messages; never render raw
@@ -546,7 +551,7 @@ export function EventFormModal({
         </DialogHeader>
 
         <div className="flex items-center gap-2 mt-1 mb-2">
-            {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
+            {Array.from({ length: totalSteps + 1 }, (_, i) => i + 1).map((s) => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-medium transition-colors ${
                   s < step ? 'bg-brand text-white' : s === step ? 'bg-brand text-white' : 'bg-navy-800 text-[#64748B]'
@@ -554,9 +559,9 @@ export function EventFormModal({
                   {s < step ? '✓' : s}
                 </div>
                 <span className={`text-xs hidden sm:inline ${s === step ? 'text-white' : 'text-[#64748B]'}`}>
-                  {s === 1 ? 'Dados' : s === 2 ? 'Membros' : 'Músicas'}
+                  {s === 1 ? 'Dados' : s === 2 ? 'Membros' : s <= totalSteps ? 'Músicas' : 'Concluído'}
                 </span>
-                {s < totalSteps && <div className="w-8 h-px bg-white/[0.08]" />}
+                {s <= totalSteps && <div className="w-8 h-px bg-white/[0.08]" />}
               </div>
             ))}
         </div>
@@ -617,7 +622,7 @@ export function EventFormModal({
               </div>
             )}
 
-            {step === 3 && (
+            {step === 3 && form.type === 'culto' && (
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-semibold text-white">Músicas do Culto</h3>
@@ -737,6 +742,27 @@ export function EventFormModal({
                   <button type="button" onClick={() => setStep(2)} className="flex-1 rounded-card border border-white/[0.08] py-2.5 text-sm text-[#94A3B8] hover:bg-white/[0.04]">← Voltar</button>
                   <button type="button" onClick={handleSubmit} disabled={saving} className="flex-1 rounded-card bg-brand py-2.5 text-sm font-medium text-white hover:bg-brand-light disabled:opacity-60">{saving ? 'Salvando...' : (isEditing ? 'Salvar Evento' : 'Criar Evento')}</button>
                 </div>
+              </div>
+            )}
+            {step === totalSteps + 1 && saveResult && (
+              <div className="space-y-5 py-4 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
+                  <Check className="h-6 w-6" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Evento salvo com sucesso</h3>
+                  <p className={`mt-2 text-sm ${saveResult.status === 'failed' ? 'text-amber-300' : 'text-[#94A3B8]'}`}>{saveResult.message}</p>
+                </div>
+                {saveResult.url && (
+                  <div className="rounded-card border border-white/[0.08] bg-navy-800/50 p-3 text-left">
+                    <p className="mb-2 truncate text-xs text-[#94A3B8]">{saveResult.url}</p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={async () => { await navigator.clipboard.writeText(saveResult.url!); toast.success('Link copiado.') }} className="inline-flex flex-1 items-center justify-center gap-2 rounded-card border border-white/[0.08] py-2 text-sm text-white hover:bg-white/[0.04]"><Copy className="h-4 w-4" /> Copiar link</button>
+                      <a href={saveResult.url} target="_blank" rel="noopener noreferrer" className="inline-flex flex-1 items-center justify-center gap-2 rounded-card bg-brand py-2 text-sm font-medium text-white hover:bg-brand-light"><ExternalLink className="h-4 w-4" /> Abrir playlist</a>
+                    </div>
+                  </div>
+                )}
+                <button type="button" onClick={() => handleOpenChange(false)} className="w-full rounded-card border border-white/[0.08] py-2.5 text-sm text-[#94A3B8] hover:text-white">Fechar</button>
               </div>
             )}
           </div>

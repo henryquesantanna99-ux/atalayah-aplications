@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Clock, Check, Trash2, UserPlus } from 'lucide-react'
+import { X, Clock, Check, ExternalLink, RefreshCw, Trash2, UserPlus } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { MomentBadge } from '@/components/ui/moment-badge'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { EventMember, Profile, SetlistSong } from '@/types/database'
-import { assignEventMember, deleteEvent, removeEventMember } from './actions'
+import { assignEventMember, deleteEvent, removeEventMember, syncEventYoutubePlaylist } from './actions'
 import { EventFormModal } from './event-form-modal'
 import { CreateMeetButton } from '../comunhao/create-meet-button'
 import type { ScheduleFunctionOption } from '@/lib/schedule-functions'
@@ -46,6 +46,9 @@ interface CalendarEvent {
   is_online?: boolean
   meet_link?: string | null
   google_calendar_event_id?: string | null
+  youtube_playlist_url?: string | null
+  youtube_playlist_sync_status?: 'not_requested' | 'pending' | 'syncing' | 'synced' | 'failed'
+  youtube_playlist_last_error?: string | null
 }
 
 interface DayDetailModalProps {
@@ -215,6 +218,15 @@ export function DayDetailModal({
     }
   }
 
+  async function handlePlaylistRetry() {
+    setAdminProcessing('youtube-playlist')
+    const result = await syncEventYoutubePlaylist(selectedEvent.id)
+    setSelectedEvent((current) => ({ ...current, youtube_playlist_url: result.url, youtube_playlist_sync_status: result.status, youtube_playlist_last_error: result.status === 'failed' ? result.message : null }))
+    if (result.status === 'synced') toast.success(result.message)
+    else toast.error(result.message)
+    setAdminProcessing(null)
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -317,6 +329,19 @@ export function DayDetailModal({
             </div>
             {selectedEvent.notes && (
               <p className="text-sm text-[#94A3B8] mt-2">{selectedEvent.notes}</p>
+            )}
+            {selectedEvent.youtube_playlist_url && (
+              <a href={selectedEvent.youtube_playlist_url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-card border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm font-medium text-red-200 hover:border-red-400/40">
+                <ExternalLink className="h-4 w-4" aria-hidden="true" /> Abrir playlist do evento
+              </a>
+            )}
+            {isAdmin && selectedEvent.youtube_playlist_sync_status === 'failed' && (
+              <div className="mt-3 rounded-card border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-200">
+                <p>{selectedEvent.youtube_playlist_last_error ?? 'A playlist ainda não pôde ser sincronizada.'}</p>
+                <button type="button" onClick={handlePlaylistRetry} disabled={adminProcessing === 'youtube-playlist'} className="mt-2 inline-flex items-center gap-2 font-medium hover:text-white disabled:opacity-50">
+                  <RefreshCw className={`h-4 w-4 ${adminProcessing === 'youtube-playlist' ? 'animate-spin' : ''}`} /> Tentar novamente
+                </button>
+              </div>
             )}
             {selectedEvent.type === 'comunhao' && (
               <div className="mt-3 space-y-1 rounded-card border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-[#94A3B8]">
