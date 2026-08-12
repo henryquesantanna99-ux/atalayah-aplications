@@ -19,25 +19,12 @@ import type { Json } from '@/types/database'
 
 const TEAM_MASTERY_OPTIONS = ['100% da equipe', 'Apenas a banda', 'Apenas os vocais', 'Só algumas pessoas'] as const
 
-const KEYS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
-  'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm']
-const MOMENTS = ['Prévia', 'Adoração', 'Palavra', 'Celebração'] as const
-
-interface Profile {
-  id: string
-  full_name: string | null
-}
-
 interface AddCatalogSongModalProps {
-  profiles: Profile[]
   song?: {
     songId: string
     variationId: string | null
     title: string
     artist: string | null
-    keyNote: string | null
-    moment: string | null
-    soloistId: string | null
     version: string | null
     youtubeUrl: string | null
     youtubeVideoId: string | null
@@ -56,9 +43,6 @@ interface AddCatalogSongModalProps {
 const emptyForm = {
   title: '',
   artist: '',
-  key_note: '',
-  moment: '',
-  soloist_id: '',
   version: '',
   youtube_url: '',
   youtube_video_id: '',
@@ -89,15 +73,14 @@ function getRelativeFilePath(file: File) {
   return relativePath && relativePath.length > 0 ? relativePath : file.name
 }
 
-export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps) {
+export function AddCatalogSongModal({ song }: AddCatalogSongModalProps) {
   const router = useRouter()
   const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const isEditing = Boolean(song)
   const initialForm = song ? {
-    title: song.title, artist: song.artist ?? '', key_note: song.keyNote ?? '', moment: song.moment ?? '',
-    soloist_id: song.soloistId ?? '', version: song.version ?? '', youtube_url: song.youtubeUrl ?? '',
+    title: song.title, artist: song.artist ?? '', version: song.version ?? '', youtube_url: song.youtubeUrl ?? '',
     youtube_video_id: song.youtubeVideoId ?? '', youtube_thumbnail: song.youtubeThumbnail ?? '',
     youtube_duration: song.youtubeDuration ?? '', bpm: song.bpm ? String(song.bpm) : '',
     lyrics_plain: song.lyricsPlain ?? '', lyrics_synced: song.lyricsSynced ?? '', album_name: song.albumName ?? '',
@@ -152,13 +135,12 @@ export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps
         youtube_video_id: data.youtubeVideoId || result.videoId,
         youtube_thumbnail: data.youtubeThumbnail || result.thumbnail || '',
         youtube_duration: data.youtubeDuration || result.duration || '',
-        key_note: data.keyNote || current.key_note,
         bpm: data.bpm ? String(data.bpm) : current.bpm,
-        album_name: data.albumName || '',
-        lyrics_plain: data.lyricsPlain || '',
-        lyrics_synced: data.lyricsSynced || '',
-        metadata_source: data.metadataSource || 'youtube',
-        metadata_payload: data.metadataPayload || {},
+        album_name: data.albumName || current.album_name,
+        lyrics_plain: data.lyricsPlain || current.lyrics_plain,
+        lyrics_synced: data.lyricsSynced || current.lyrics_synced,
+        metadata_source: data.metadataSource || current.metadata_source || 'youtube',
+        metadata_payload: data.metadataPayload || current.metadata_payload,
       }))
       setYoutubeResults([])
       toast.success('Música confirmada e informações preenchidas.')
@@ -236,9 +218,6 @@ export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps
       const payload = {
         title: form.title.trim(),
         artist: form.artist || null,
-        keyNote: form.key_note || null,
-        moment: form.moment || null,
-        soloistId: form.soloist_id || null,
         version: form.version || null,
         youtubeUrl: form.youtube_url || null,
         youtubeVideoId: form.youtube_video_id || null,
@@ -349,50 +328,6 @@ export function AddCatalogSongModal({ profiles, song }: AddCatalogSongModalProps
                 placeholder="ao vivo, original..."
                 className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand placeholder-[#64748B]"
               />
-            </div>
-
-            <div>
-              <label htmlFor="cat-key" className="block text-xs text-[#94A3B8] mb-1">Tom</label>
-              <select
-                id="cat-key"
-                name="key_note"
-                value={form.key_note}
-                onChange={handleChange}
-                className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand"
-              >
-                <option value="">Selecionar</option>
-                {KEYS.map((k) => <option key={k} value={k}>{k}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="cat-moment" className="block text-xs text-[#94A3B8] mb-1">Momento</label>
-              <select
-                id="cat-moment"
-                name="moment"
-                value={form.moment}
-                onChange={handleChange}
-                className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand"
-              >
-                <option value="">Selecionar</option>
-                {MOMENTS.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-
-            <div className="col-span-2">
-              <label htmlFor="cat-soloist" className="block text-xs text-[#94A3B8] mb-1">Solista</label>
-              <select
-                id="cat-soloist"
-                name="soloist_id"
-                value={form.soloist_id}
-                onChange={handleChange}
-                className="w-full px-3 py-2 rounded-card bg-navy-800 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand"
-              >
-                <option value="">Selecionar</option>
-                {profiles.map((p) => (
-                  <option key={p.id} value={p.id}>{p.full_name}</option>
-                ))}
-              </select>
             </div>
 
             <div className="col-span-2">

@@ -15,9 +15,6 @@ function assertTeamMastery(value: string): asserts value is TeamMastery {
 export interface CatalogSongInput {
   title: string
   artist: string | null
-  keyNote: string | null
-  moment: string | null
-  soloistId: string | null
   version: string | null
   youtubeUrl: string | null
   youtubeVideoId: string | null
@@ -59,7 +56,7 @@ export async function addCatalogSong(input: CatalogSongInput) {
     const { error: updateError } = await supabase.from('songs').update({
       title: input.title.trim(), artist: input.artist, youtube_url: input.youtubeUrl,
       youtube_video_id: input.youtubeVideoId, youtube_thumbnail: input.youtubeThumbnail,
-      youtube_duration: input.youtubeDuration, default_key: input.keyNote, bpm: input.bpm,
+      youtube_duration: input.youtubeDuration, bpm: input.bpm,
       lyrics_plain: input.lyricsPlain, lyrics_synced: input.lyricsSynced, album_name: input.albumName,
       metadata_source: input.metadataSource, metadata_payload: input.metadataPayload,
       metadata_fetched_at: input.metadataSource ? new Date().toISOString() : null, team_mastery: input.teamMastery,
@@ -72,7 +69,6 @@ export async function addCatalogSong(input: CatalogSongInput) {
         title: input.title.trim(),
         artist: input.artist || null,
         youtube_url: input.youtubeUrl || null,
-        default_key: input.keyNote || null,
         youtube_video_id: input.youtubeVideoId,
         youtube_thumbnail: input.youtubeThumbnail,
         youtube_duration: input.youtubeDuration,
@@ -93,23 +89,8 @@ export async function addCatalogSong(input: CatalogSongInput) {
     songId = newSong.id
   }
 
-  // Insert a new song_variation entry
-  const { data: variation, error: varError } = await supabase.from('song_variations').insert({
-    song_id: songId,
-    artist: input.artist || null,
-    key_note: input.keyNote || null,
-    moment: (input.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null) || null,
-    soloist_id: input.soloistId || null,
-    version: input.version || null,
-    youtube_url: input.youtubeUrl || null,
-    created_by: user.id,
-  }).select('id').single()
-
-  if (varError) throw new Error(varError.message)
-
   revalidatePath('/musicas')
-
-  return { songId, variationId: variation.id }
+  return { songId, variationId: null }
 }
 
 export async function editCatalogSong(songId: string, variationId: string | null, input: CatalogSongInput) {
@@ -118,21 +99,13 @@ export async function editCatalogSong(songId: string, variationId: string | null
   const { error: songError } = await supabase.from('songs').update({
     title: input.title.trim(), artist: input.artist, youtube_url: input.youtubeUrl,
     youtube_video_id: input.youtubeVideoId, youtube_thumbnail: input.youtubeThumbnail,
-    youtube_duration: input.youtubeDuration, default_key: input.keyNote, bpm: input.bpm,
+    youtube_duration: input.youtubeDuration, bpm: input.bpm,
     lyrics_plain: input.lyricsPlain, lyrics_synced: input.lyricsSynced, album_name: input.albumName,
     metadata_source: input.metadataSource, metadata_payload: input.metadataPayload,
     metadata_fetched_at: input.metadataSource ? new Date().toISOString() : null, team_mastery: input.teamMastery,
   }).eq('id', songId)
   if (songError) throw new Error(songError.message)
 
-  if (variationId) {
-    const { error: variationError } = await supabase.from('song_variations').update({
-      artist: input.artist, key_note: input.keyNote,
-      moment: (input.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null) || null,
-      soloist_id: input.soloistId, version: input.version, youtube_url: input.youtubeUrl,
-    }).eq('id', variationId)
-    if (variationError) throw new Error(variationError.message)
-  }
   revalidatePath('/musicas')
   return { songId, variationId }
 }
@@ -168,40 +141,33 @@ export async function updateTeamMastery(songId: string, teamMastery: string) {
   return { ip: analysis.readinessIndex, level: analysis.readinessLevel, suggestedStage: analysis.suggestedStage }
 }
 
-export async function deleteCatalogSong(variationId: string) {
+export async function deleteCatalogSong(songId: string) {
   const { supabase } = await requireEditor()
   const { error } = await supabase
-    .from('song_variations')
-    .delete()
-    .eq('id', variationId)
+    .from('songs')
+    .update({ is_catalog_visible: false })
+    .eq('id', songId)
 
   if (error) throw new Error(error.message)
   revalidatePath('/musicas')
 }
 
 export async function updateCatalogSong(
-  variationId: string,
+  songId: string,
   input: {
     artist: string | null
-    keyNote: string | null
-    moment: string | null
-    soloistId: string | null
     version: string | null
     youtubeUrl: string | null
   }
 ) {
   const { supabase } = await requireEditor()
   const { error } = await supabase
-    .from('song_variations')
+    .from('songs')
     .update({
       artist: input.artist || null,
-      key_note: input.keyNote || null,
-      moment: (input.moment as 'Prévia' | 'Adoração' | 'Palavra' | 'Celebração' | null) || null,
-      soloist_id: input.soloistId || null,
-      version: input.version || null,
       youtube_url: input.youtubeUrl || null,
     })
-    .eq('id', variationId)
+    .eq('id', songId)
 
   if (error) throw new Error(error.message)
   revalidatePath('/musicas')

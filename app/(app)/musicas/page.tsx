@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/layout/page-header'
 import { LaiaFloatingBadge } from '@/components/laia/laia-floating-badge'
 import { CatalogTable } from './catalog-table'
 import { AddCatalogSongModal } from './add-catalog-song-modal'
-import type { SongVariationWithDetails } from '@/types/database'
+import type { CatalogSong } from './catalog-types'
 
 export default async function MusicasPage() {
   const supabase = await createClient()
@@ -18,10 +18,10 @@ export default async function MusicasPage() {
   // Fetch the catalog variations and the base songs separately.
   // Some songs may exist before a variation row is created; those are still
   // rendered as catalog entries so the song never "disappears" from /musicas.
-  const [{ data: variationsData }, { data: songsData }] = await Promise.all([
+  const [variationsResult, songsResult] = await Promise.all([
     supabase
       .from('song_variations')
-      .select('*, songs!inner(id, title, artist, team_mastery, youtube_video_id, youtube_url, youtube_thumbnail, youtube_duration, bpm, default_key, album_name, lyrics_plain, lyrics_synced, metadata_source, metadata_payload, is_catalog_visible), profiles(id, full_name)')
+      .select('id, song_id, version, songs!inner(is_catalog_visible)')
       .eq('songs.is_catalog_visible', true)
       .order('created_at', { ascending: false }),
     supabase
@@ -31,16 +31,15 @@ export default async function MusicasPage() {
       .order('created_at', { ascending: false }),
   ])
 
-  const variations = buildCatalogRows(variationsData ?? [], songsData ?? [])
+  if (variationsResult.error || songsResult.error) {
+    console.error('Falha ao carregar catálogo de músicas', {
+      variations: variationsResult.error?.message,
+      songs: songsResult.error?.message,
+    })
+    return <CatalogReadError />
+  }
 
-  // Profiles for the add modal soloist selector
-  const { data: activeProfiles } = isEditor
-    ? await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .eq('status', 'active')
-        .order('full_name')
-    : { data: [] }
+  const variations = buildCatalogRows(variationsResult.data, songsResult.data)
 
   return (
     <>
@@ -49,7 +48,7 @@ export default async function MusicasPage() {
         subtitle="Catálogo geral de músicas do ministério"
         actions={
           isEditor ? (
-            <AddCatalogSongModal profiles={activeProfiles ?? []} />
+            <AddCatalogSongModal />
           ) : undefined
         }
       />
@@ -57,7 +56,6 @@ export default async function MusicasPage() {
         <CatalogTable
           variations={variations}
           isEditor={isEditor}
-          profiles={activeProfiles ?? []}
         />
       </div>
       <LaiaFloatingBadge tip="Sugestão de músicas para o culto" />
@@ -66,7 +64,7 @@ export default async function MusicasPage() {
 }
 
 
-function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): SongVariationWithDetails[] {
+function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): CatalogSong[] {
   const songs = songsData as Array<{
     id: string
     title: string
@@ -77,7 +75,6 @@ function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): Song
     youtube_thumbnail: string | null
     youtube_duration: string | null
     bpm: number | null
-    default_key: string | null
     album_name: string | null
     lyrics_plain: string | null
     lyrics_synced: string | null
@@ -86,47 +83,43 @@ function buildCatalogRows(variationsData: unknown[], songsData: unknown[]): Song
     created_at: string
     song_stems?: Array<{ id: string; stem_type: string; original_file_name: string | null }> | null
   }>
-  const stemsBySongId = new Map(songs.map((song) => [song.id, song.song_stems ?? []]))
-  const variations = (variationsData as SongVariationWithDetails[]).map((variation) => ({
-    ...variation,
-    song_stems: stemsBySongId.get(variation.song_id) ?? [],
-  }))
-  const variationSongIds = new Set(variations.map((variation) => variation.song_id))
+  const firstVariation = new Map<string, { id: string; song_id: string; version: string | null }>()
+  for (const variation of variationsData as Array<{ id: string; song_id: string; version: string | null }>) {
+    if (!firstVariation.has(variation.song_id)) firstVariation.set(variation.song_id, variation)
+  }
 
-  const songsWithoutVariation = songs
-    .filter((song) => !variationSongIds.has(song.id))
-    .map((song) => ({
-      id: `song:${song.id}`,
-      song_id: song.id,
+  return songs.map((song) => {
+    const variation = firstVariation.get(song.id)
+    return {
+      id: variation?.id ?? `song:${song.id}`,
+      songId: song.id,
+      variationId: variation?.id ?? null,
+      title: song.title,
       artist: song.artist,
-      key_note: null,
-      moment: null,
-      soloist_id: null,
-      version: null,
-      youtube_url: song.youtube_url,
-      created_by: null,
-      created_at: song.created_at,
-      songs: {
-        id: song.id,
-        title: song.title,
-        artist: song.artist,
-        team_mastery: song.team_mastery,
-        youtube_url: song.youtube_url,
-        youtube_video_id: song.youtube_video_id,
-        youtube_thumbnail: song.youtube_thumbnail,
-        youtube_duration: song.youtube_duration,
-        bpm: song.bpm,
-        default_key: song.default_key,
-        album_name: song.album_name,
-        lyrics_plain: song.lyrics_plain,
-        lyrics_synced: song.lyrics_synced,
-        metadata_source: song.metadata_source,
-        metadata_payload: song.metadata_payload,
-      },
-      profiles: null,
-      song_stems: song.song_stems ?? [],
-      is_virtual: true,
-    })) satisfies SongVariationWithDetails[]
+      version: variation?.version ?? null,
+      youtubeUrl: song.youtube_url,
+      youtubeVideoId: song.youtube_video_id,
+      youtubeThumbnail: song.youtube_thumbnail,
+      youtubeDuration: song.youtube_duration,
+      bpm: song.bpm,
+      albumName: song.album_name,
+      lyricsPlain: song.lyrics_plain,
+      lyricsSynced: song.lyrics_synced,
+      metadataSource: song.metadata_source,
+      metadataPayload: song.metadata_payload,
+      teamMastery: song.team_mastery,
+      stems: song.song_stems ?? [],
+    }
+  })
+}
 
-  return [...variations, ...songsWithoutVariation]
+function CatalogReadError() {
+  return (
+    <div className="p-6">
+      <div role="alert" className="rounded-modal border border-red-400/30 bg-red-400/10 p-6 text-red-100">
+        <h1 className="text-lg font-semibold">Não foi possível carregar o catálogo</h1>
+        <p className="mt-2 text-sm text-red-100/80">Ocorreu uma falha ao consultar as músicas. Tente atualizar a página em alguns instantes.</p>
+      </div>
+    </div>
+  )
 }
