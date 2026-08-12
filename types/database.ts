@@ -178,6 +178,11 @@ export interface Database {
           is_online: boolean
           meet_link: string | null
           google_calendar_event_id: string | null
+          youtube_playlist_id: string | null
+          youtube_playlist_url: string | null
+          youtube_playlist_sync_status: 'not_requested' | 'pending' | 'syncing' | 'synced' | 'failed'
+          youtube_playlist_last_error: string | null
+          youtube_playlist_synced_at: string | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -196,6 +201,11 @@ export interface Database {
           is_online?: boolean
           meet_link?: string | null
           google_calendar_event_id?: string | null
+          youtube_playlist_id?: string | null
+          youtube_playlist_url?: string | null
+          youtube_playlist_sync_status?: 'not_requested' | 'pending' | 'syncing' | 'synced' | 'failed'
+          youtube_playlist_last_error?: string | null
+          youtube_playlist_synced_at?: string | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -213,6 +223,11 @@ export interface Database {
           is_online?: boolean
           meet_link?: string | null
           google_calendar_event_id?: string | null
+          youtube_playlist_id?: string | null
+          youtube_playlist_url?: string | null
+          youtube_playlist_sync_status?: 'not_requested' | 'pending' | 'syncing' | 'synced' | 'failed'
+          youtube_playlist_last_error?: string | null
+          youtube_playlist_synced_at?: string | null
           updated_at?: string
         }
         Relationships: []

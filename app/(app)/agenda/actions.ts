@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit } from '@/lib/permissions'
 import type { Json } from '@/types/database'
+import { syncYoutubePlaylist } from '@/lib/music/youtube-playlists'
 
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
@@ -148,7 +149,7 @@ export async function createScale(input: {
 }) {
   const validSongs = input.songs.filter((song) => song.songTitle.trim())
   const { supabase } = await requireEditor()
-  const { error } = await supabase.rpc('save_event_scale', {
+  const { data: savedEventId, error } = await supabase.rpc('save_event_scale', {
     p_event_id: input.eventId,
     p_event: input.event,
     p_members: input.members,
@@ -159,8 +160,70 @@ export async function createScale(input: {
     throw new Error(safeMessage ?? 'Não foi possível salvar a escala. Tente novamente.')
   }
 
+  const eventId = savedEventId as string
+  let playlist: YoutubeSyncResult = { status: 'not_requested', url: null, message: 'Evento salvo com sucesso.' }
+  if (input.event.type === 'culto') {
+    await supabase.from('events').update({ youtube_playlist_sync_status: 'pending', youtube_playlist_last_error: null }).eq('id', eventId)
+    playlist = await syncEventYoutubePlaylist(eventId)
+  }
+
   revalidatePath('/agenda')
   revalidatePath('/dashboard')
   revalidatePath('/musicas')
   revalidatePath('/comunhao')
+  return { eventId, playlist }
+}
+
+type YoutubeSyncResult = {
+  status: 'not_requested' | 'pending' | 'syncing' | 'synced' | 'failed'
+  url: string | null
+  message: string
+}
+
+/** Authenticated, retryable reconciliation action. YouTube failures never undo the event. */
+export async function syncEventYoutubePlaylist(eventId: string): Promise<YoutubeSyncResult> {
+  const { supabase } = await requireEditor()
+  const { data: claimed } = await supabase
+    .from('events')
+    .update({ youtube_playlist_sync_status: 'syncing', youtube_playlist_last_error: null })
+    .eq('id', eventId)
+    .in('youtube_playlist_sync_status', ['pending', 'failed'])
+    .select('id, title, type, youtube_playlist_id, youtube_playlist_url')
+    .maybeSingle()
+
+  if (!claimed) {
+    const { data: current } = await supabase.from('events').select('youtube_playlist_sync_status, youtube_playlist_url').eq('id', eventId).maybeSingle()
+    return {
+      status: current?.youtube_playlist_sync_status ?? 'failed',
+      url: current?.youtube_playlist_url ?? null,
+      message: current?.youtube_playlist_sync_status === 'synced' ? 'Playlist sincronizada.' : 'A sincronização já está em andamento.',
+    }
+  }
+  if (claimed.type !== 'culto') return { status: 'not_requested', url: null, message: 'Este evento não possui setlist.' }
+
+  try {
+    const { data: songs, error: songsError } = await supabase
+      .from('setlist_songs').select('reference_link').eq('event_id', eventId).order('order_index')
+    if (songsError) throw songsError
+    const playlist = await syncYoutubePlaylist({
+      title: claimed.title,
+      playlistId: claimed.youtube_playlist_id,
+      songUrls: (songs ?? []).map((song) => song.reference_link),
+      onPlaylistReady: async (ready) => {
+        const { error } = await supabase.from('events').update({ youtube_playlist_id: ready.id, youtube_playlist_url: ready.url }).eq('id', eventId)
+        if (error) throw error
+      },
+    })
+    await supabase.from('events').update({
+      youtube_playlist_id: playlist.id, youtube_playlist_url: playlist.url,
+      youtube_playlist_sync_status: 'synced', youtube_playlist_last_error: null,
+      youtube_playlist_synced_at: new Date().toISOString(),
+    }).eq('id', eventId)
+    revalidatePath('/agenda')
+    return { status: 'synced', url: playlist.url, message: 'Playlist sincronizada com sucesso.' }
+  } catch {
+    const safeMessage = 'Não foi possível sincronizar a playlist agora. O evento foi salvo e você pode tentar novamente.'
+    await supabase.from('events').update({ youtube_playlist_sync_status: 'failed', youtube_playlist_last_error: safeMessage }).eq('id', eventId)
+    return { status: 'failed', url: claimed.youtube_playlist_url, message: safeMessage }
+  }
 }

@@ -47,6 +47,9 @@ interface CalendarEvent {
   is_online?: boolean
   meet_link?: string | null
   google_calendar_event_id?: string | null
+  youtube_playlist_url?: string | null
+  youtube_playlist_sync_status?: 'not_requested' | 'pending' | 'syncing' | 'synced' | 'failed'
+  youtube_playlist_last_error?: string | null
 }
 
 interface MonthlyCalendarProps {

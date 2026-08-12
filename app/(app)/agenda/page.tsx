@@ -28,7 +28,7 @@ export default async function AgendaPage({ searchParams }: AgendaPageProps) {
 
   const { data: events } = await supabase
     .from('events')
-    .select('id, title, type, date, arrival_time, start_time, notes, agenda_topic, conductor_id, location, is_online, meet_link, google_calendar_event_id')
+    .select('id, title, type, date, arrival_time, start_time, notes, agenda_topic, conductor_id, location, is_online, meet_link, google_calendar_event_id, youtube_playlist_url, youtube_playlist_sync_status, youtube_playlist_last_error')
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date')
