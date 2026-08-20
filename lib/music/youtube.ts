@@ -7,6 +7,10 @@ export type YouTubeMusicOption = {
   url: string
 }
 
+export class YouTubeConfigurationError extends Error {
+  code = 'YOUTUBE_NOT_CONFIGURED'
+}
+
 type YouTubeSearchItem = {
   id: { videoId?: string }
   snippet: {
@@ -20,7 +24,7 @@ type YouTubeVideoItem = { id: string; contentDetails?: { duration?: string } }
 
 export async function searchYouTubeMusic(query: string, maxResults = 5): Promise<YouTubeMusicOption[]> {
   const apiKey = process.env.YOUTUBE_API_KEY
-  if (!apiKey) throw new Error('YOUTUBE_API_KEY não configurada')
+  if (!apiKey) throw new YouTubeConfigurationError('YOUTUBE_API_KEY não configurada')
 
   const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search')
   searchUrl.searchParams.set('part', 'snippet')
