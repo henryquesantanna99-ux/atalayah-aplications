@@ -3,14 +3,23 @@ DECLARE
   applied text[];
   save_event_scale_definition text;
 BEGIN
-  SELECT array_agg(version ORDER BY version)
-  INTO applied
-  FROM supabase_migrations.schema_migrations
-  WHERE (version, name) IN (
-    ('050', 'normalized_song_identity'),
-    ('051', 'general_setlist_visibility'),
-    ('052', 'event_youtube_playlists')
-  );
+  IF to_regclass('supabase_migrations.schema_migrations') IS NULL THEN
+    RAISE EXCEPTION USING
+      MESSAGE = 'Supabase CLI migration history table does not exist after db push',
+      HINT = 'Run this validation only after a successful supabase db push; do not mark migrations as applied manually.';
+  END IF;
+
+  -- Keep the ledger query dynamic: this file can then report the explicit error
+  -- above even on legacy projects where the schema has never been initialized.
+  EXECUTE $sql$
+    SELECT array_agg(version ORDER BY version)
+    FROM supabase_migrations.schema_migrations
+    WHERE (version, name) IN (
+      ('050', 'normalized_song_identity'),
+      ('051', 'general_setlist_visibility'),
+      ('052', 'event_youtube_playlists')
+    )
+  $sql$ INTO applied;
   IF applied IS DISTINCT FROM ARRAY['050', '051', '052']::text[] THEN
     RAISE EXCEPTION 'Required migrations are not recorded in order: %', applied;
   END IF;

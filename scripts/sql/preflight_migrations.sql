@@ -3,10 +3,21 @@ DECLARE
   migration_051_recorded boolean;
   partial_artifacts text[] := ARRAY[]::text[];
 BEGIN
-  SELECT EXISTS (
-    SELECT 1 FROM supabase_migrations.schema_migrations
-    WHERE version = '051' AND name = 'general_setlist_visibility'
-  ) INTO migration_051_recorded;
+  -- Older/never-linked projects do not have the Supabase CLI migration ledger
+  -- yet. The subsequent `supabase db push` creates it, so an absent ledger is
+  -- equivalent to "051 is not recorded" during this preflight. Dynamic SQL is
+  -- required because PostgreSQL resolves a static relation reference before an
+  -- IF guard can run.
+  IF to_regclass('supabase_migrations.schema_migrations') IS NULL THEN
+    migration_051_recorded := false;
+  ELSE
+    EXECUTE $sql$
+      SELECT EXISTS (
+        SELECT 1 FROM supabase_migrations.schema_migrations
+        WHERE version = '051' AND name = 'general_setlist_visibility'
+      )
+    $sql$ INTO migration_051_recorded;
+  END IF;
 
   IF migration_051_recorded THEN
     RETURN;
