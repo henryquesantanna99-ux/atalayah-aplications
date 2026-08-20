@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { createScale } from './actions'
+import { createScale, reportCatalogLoadFailure } from './actions'
 import type { ScheduleFunctionOption } from '@/lib/schedule-functions'
 import type { Json } from '@/types/database'
 
@@ -66,14 +66,9 @@ interface CatalogSong {
   stems: CatalogStem[]
 }
 
-interface SongVariationRow {
+interface CatalogVariationRow {
   id: string
   song_id: string
-  songs: {
-    title: string | null
-    artist: string | null
-  } | null
-  artist: string | null
   key_note: string | null
   moment: EventSongDraft['moment'] | null
   soloist_id: string | null
@@ -88,6 +83,7 @@ interface SongRow {
   youtube_url: string | null
   created_at: string
   song_stems?: CatalogStem[] | null
+  song_variations?: CatalogVariationRow[] | null
 }
 
 interface EventSongDraft {
@@ -135,6 +131,7 @@ interface MusicResolveResult {
 }
 
 type MusicSearchState = { status: 'idle' | 'loading' | 'success' | 'error'; results: MusicResolveResult[]; error?: string }
+type CatalogLoadState = 'idle' | 'loading' | 'success' | 'error'
 
 interface EventFormModalProps {
   event?: CalendarEvent
@@ -207,6 +204,7 @@ export function EventFormModal({
   const [scheduleFunctions, setScheduleFunctions] = useState<ScheduleFunctionOption[]>([])
   const [legacyAssignments, setLegacyAssignments] = useState<Record<string, string>>({})
   const [catalogLoaded, setCatalogLoaded] = useState(false)
+  const [catalogLoadState, setCatalogLoadState] = useState<CatalogLoadState>('idle')
   const [songSearchByDraft, setSongSearchByDraft] = useState<Record<string, string>>({})
   const [musicSearches, setMusicSearches] = useState<Record<string, MusicSearchState>>({})
   const suppressedSearches = useRef(new Set<string>())
@@ -234,22 +232,27 @@ export function EventFormModal({
   const totalSteps = form.type === 'culto' ? 3 : 2
 
   async function loadCatalog() {
-    if (catalogLoaded) return
-    const [{ data: variationsData }, { data: songsData }] = await Promise.all([
-      supabase
-        .from('song_variations')
-        .select('id, song_id, songs!inner(title, artist, is_catalog_visible), key_note, moment, soloist_id, version, youtube_url')
-        .eq('songs.is_catalog_visible', true)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('songs')
-        .select('id, title, artist, youtube_url, created_at, song_stems(id, stem_type, original_file_name)')
-        .eq('is_catalog_visible', true)
-        .order('created_at', { ascending: false }),
-    ])
+    if (catalogLoaded || catalogLoadState === 'loading') return
+    setCatalogLoadState('loading')
 
-    setCatalogSongs(buildCatalogSongs(variationsData ?? [], songsData ?? []))
+    const result = await supabase
+      .from('songs')
+      .select('id, title, artist, youtube_url, created_at, song_stems(id, stem_type, original_file_name), song_variations(id, song_id, key_note, moment, soloist_id, version, youtube_url, created_at)')
+      .eq('is_catalog_visible', true)
+      .order('created_at', { ascending: false })
+      .order('created_at', { referencedTable: 'song_variations', ascending: false })
+
+    if (result.error) {
+      setCatalogLoadState('error')
+      setCatalogLoaded(false)
+      toast.error('Não foi possível carregar o catálogo. Tente novamente.')
+      void reportCatalogLoadFailure(result.error.code ?? 'unknown').catch(() => undefined)
+      return
+    }
+
+    setCatalogSongs(buildCatalogSongs(result.data ?? []))
     setCatalogLoaded(true)
+    setCatalogLoadState('success')
   }
 
   function handleChange(
@@ -639,7 +642,8 @@ export function EventFormModal({
                       className={inputSmClass}
                     />
                     <div className="mt-3 max-h-[430px] space-y-2 overflow-y-auto pr-1">
-                      {filteredCatalogForDraft('catalog').map((catalogSong) => (
+                      {catalogLoadState === 'loading' && <p className="py-8 text-center text-xs text-[#64748B]" role="status">Carregando catálogo...</p>}
+                      {catalogLoadState === 'success' && filteredCatalogForDraft('catalog').map((catalogSong) => (
                         (() => {
                           const alreadyAdded = songs.some((song) => song.catalogVariationId === catalogSong.id)
                           return (
@@ -662,7 +666,14 @@ export function EventFormModal({
                           )
                         })()
                       ))}
-                      {filteredCatalogForDraft('catalog').length === 0 && <p className="py-8 text-center text-xs text-[#64748B]">Nenhuma música encontrada.</p>}
+                      {catalogLoadState === 'error' ? (
+                        <div className="py-8 text-center">
+                          <p className="text-xs text-red-300" role="alert">Não foi possível carregar o catálogo</p>
+                          <button type="button" onClick={() => void loadCatalog()} className="mt-3 rounded-card border border-white/[0.08] px-3 py-1.5 text-xs text-white hover:bg-white/[0.04]">Tentar novamente</button>
+                        </div>
+                      ) : catalogLoadState === 'success' && filteredCatalogForDraft('catalog').length === 0 ? (
+                        <p className="py-8 text-center text-xs text-[#64748B]">Nenhuma música encontrada.</p>
+                      ) : null}
                     </div>
                   </section>
 
@@ -845,44 +856,22 @@ function Step1Fields({
 }
 
 
-function buildCatalogSongs(variationsData: unknown[], songsData: unknown[]): CatalogSong[] {
-  const stemsBySongId = new Map<string, CatalogStem[]>()
-  const songs = songsData as SongRow[]
-
-  for (const song of songs) {
-    stemsBySongId.set(song.id, song.song_stems ?? [])
-  }
-
-  const variations = (variationsData as SongVariationRow[]).map((variation) => ({
-    id: variation.id,
-    song_id: variation.song_id,
-    title: variation.songs?.title ?? '',
-    artist: variation.artist ?? variation.songs?.artist ?? '',
-    key_note: variation.key_note,
-    moment: variation.moment,
-    soloist_id: variation.soloist_id,
-    version: variation.version,
-    youtube_url: variation.youtube_url,
-    stems: stemsBySongId.get(variation.song_id) ?? [],
-  }))
-
-  const variationSongIds = new Set(variations.map((variation) => variation.song_id))
-  const songsWithoutVariation = songs
-    .filter((song) => !variationSongIds.has(song.id))
-    .map((song) => ({
-      id: `song:${song.id}`,
+function buildCatalogSongs(songsData: unknown[]): CatalogSong[] {
+  return (songsData as SongRow[]).map((song) => {
+    const variation = song.song_variations?.[0]
+    return {
+      id: variation?.id ?? `song:${song.id}`,
       song_id: song.id,
       title: song.title,
       artist: song.artist,
-      key_note: null,
-      moment: null,
-      soloist_id: null,
-      version: null,
-      youtube_url: song.youtube_url,
+      key_note: variation?.key_note ?? null,
+      moment: variation?.moment ?? null,
+      soloist_id: variation?.soloist_id ?? null,
+      version: variation?.version ?? null,
+      youtube_url: variation?.youtube_url ?? song.youtube_url,
       stems: song.song_stems ?? [],
-    }))
-
-  return [...variations, ...songsWithoutVariation]
+    }
+  })
 }
 
 function stemDisplayName(stem: CatalogStem) {

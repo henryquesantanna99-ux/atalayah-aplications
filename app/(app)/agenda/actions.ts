@@ -6,6 +6,11 @@ import { canEdit } from '@/lib/permissions'
 import type { Json } from '@/types/database'
 import { syncYoutubePlaylist } from '@/lib/music/youtube-playlists'
 
+export async function reportCatalogLoadFailure(code: string) {
+  const safeCode = /^[A-Za-z0-9_-]{1,64}$/.test(code) ? code : 'invalid_code'
+  console.error('Falha ao carregar catálogo da agenda', { code: safeCode })
+}
+
 type EventType = 'culto' | 'ensaio' | 'comunhao' | 'evento_externo'
 
 interface EventInput {
