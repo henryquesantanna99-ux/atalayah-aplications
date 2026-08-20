@@ -1,13 +1,36 @@
-import { createLyricsExcerpt, normalizeSongTerm } from './lrclib.ts'
+import { createLyricsExcerpt, normalizeSongTerm, type LrclibLyrics } from './lrclib.ts'
+import type { YouTubeMusicOption } from './youtube.ts'
 
 export type CatalogStatus = 'matched' | 'not_found' | 'unavailable'
 
 type DiagnosticError = { code?: string; message?: string }
 
+type SongRow = {
+  id: string
+  title: string
+  artist: string | null
+  youtube_url: string | null
+  youtube_video_id: string | null
+  youtube_thumbnail: string | null
+  youtube_duration: string | null
+  lyrics_plain: string | null
+}
+
+type CatalogQueryResult = { data: SongRow[] | null; error: unknown }
+type CatalogQuery = {
+  select: (columns: string) => CatalogQuery
+  eq: (column: string, value: boolean) => CatalogQuery
+  limit: (count: number) => Promise<CatalogQueryResult>
+}
+type MusicClient = {
+  auth: { getUser: () => Promise<{ data: { user: unknown | null }; error: unknown }> }
+  from: (table: string) => CatalogQuery
+}
+
 type Dependencies = {
-  createClient: () => Promise<any>
-  searchYouTube: (query: string) => Promise<any[]>
-  findLyrics: (input: { trackName: string; artistName: string }) => Promise<any>
+  createClient: () => Promise<unknown>
+  searchYouTube: (query: string) => Promise<YouTubeMusicOption[]>
+  findLyrics: (input: { trackName: string; artistName: string }) => Promise<LrclibLyrics | null>
   logger?: Pick<Console, 'error'>
 }
 
@@ -38,15 +61,15 @@ export function createMusicResolveHandler(dependencies: Dependencies) {
   const logger = dependencies.logger ?? console
 
   return async function POST(request: Request) {
-    let supabase: any
+    let supabase: MusicClient
     try {
-      supabase = await dependencies.createClient()
+      supabase = await dependencies.createClient() as MusicClient
     } catch (error) {
       logFailure(logger, 'catalog_configuration', error)
       return Response.json({ error: 'O serviço de catálogo não está configurado.' }, { status: 500 })
     }
 
-    let authResult: any
+    let authResult: Awaited<ReturnType<MusicClient['auth']['getUser']>>
     try {
       authResult = await supabase.auth.getUser()
     } catch (error) {
@@ -69,7 +92,7 @@ export function createMusicResolveHandler(dependencies: Dependencies) {
     if (!normalizedTitle) return Response.json({ error: 'Informe o título da música.' }, { status: 400 })
 
     let catalogStatus: CatalogStatus = 'not_found'
-    let catalog: any[] = []
+    let catalog: SongRow[] = []
     try {
       const { data, error } = await supabase.from('songs')
         .select('id, title, artist, youtube_url, youtube_video_id, youtube_thumbnail, youtube_duration, lyrics_plain')
@@ -81,7 +104,7 @@ export function createMusicResolveHandler(dependencies: Dependencies) {
         if (AUTHORIZATION_CODES.has(code ?? '')) return Response.json({ error: 'Acesso negado.' }, { status: 403 })
         catalogStatus = 'unavailable'
       } else {
-        catalog = (data ?? []).filter((song: any) => normalizeSongTerm(song.title) === normalizedTitle
+        catalog = (data ?? []).filter((song) => normalizeSongTerm(song.title) === normalizedTitle
           && (!normalizedArtist || normalizeSongTerm(song.artist ?? '') === normalizedArtist))
         catalogStatus = catalog.length ? 'matched' : 'not_found'
       }
