@@ -349,7 +349,9 @@ export function EventFormModal({
           const payload = await response.json()
           if (!response.ok) throw new Error(payload.error ?? 'Erro ao buscar músicas.')
           if (searchSequence.current[draft.id] !== sequence) return
-          setMusicSearches((current) => ({ ...current, [draft.id]: { status: 'success', results: payload.results ?? [] } }))
+          setMusicSearches((current) => ({ ...current, [draft.id]: {
+            status: 'success', results: payload.results ?? [], catalogStatus: payload.catalogStatus,
+          } }))
         } catch (error) {
           if (controller.signal.aborted || searchSequence.current[draft.id] !== sequence) return
           setMusicSearches((current) => ({ ...current, [draft.id]: { status: 'error', results: [], error: error instanceof Error ? error.message : 'Erro ao buscar músicas.' } }))
@@ -723,6 +725,9 @@ export function EventFormModal({
                           )}
                           {musicSearches[draft.id]?.status === 'error' && (
                             <p className="text-[11px] text-red-300" role="alert">{musicSearches[draft.id].error}</p>
+                          )}
+                          {musicSearches[draft.id]?.status === 'success' && musicSearches[draft.id].catalogStatus === 'unavailable' && (
+                            <p className="text-[11px] text-amber-300" role="status">Catálogo temporariamente indisponível; exibindo resultados do YouTube.</p>
                           )}
                           {musicSearches[draft.id]?.status === 'success' && musicSearches[draft.id].results.length === 0 && (
                             <p className="text-[11px] text-[#64748B]">Nenhum resultado encontrado.</p>
