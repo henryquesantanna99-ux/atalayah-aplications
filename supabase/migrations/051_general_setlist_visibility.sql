@@ -24,7 +24,7 @@ WITH ranked AS (
 ), duplicates AS (
   SELECT id, canonical_id FROM ranked WHERE duplicate_rank > 1
 )
-UPDATE public.worship_song_votes AS vote
+UPDATE public.worship_songs AS vote
 SET catalog_variation_id = duplicates.canonical_id
 FROM duplicates
 WHERE vote.catalog_variation_id = duplicates.id;
