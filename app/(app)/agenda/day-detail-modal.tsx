@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Clock, Check, ExternalLink, RefreshCw, Trash2, UserPlus } from 'lucide-react'
+import { X, Clock, Check, ExternalLink, RefreshCw, Trash2, UserPlus, Copy } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { MomentBadge } from '@/components/ui/moment-badge'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { EventMember, Profile, SetlistSong } from '@/types/database'
-import { assignEventMember, deleteEvent, removeEventMember, syncEventYoutubePlaylist } from './actions'
+import { assignEventMember, deleteEvent, duplicateEvent, removeEventMember, syncEventYoutubePlaylist } from './actions'
 import { EventFormModal } from './event-form-modal'
 import { CreateMeetButton } from '../comunhao/create-meet-button'
 import type { ScheduleFunctionOption } from '@/lib/schedule-functions'
@@ -89,9 +89,16 @@ export function DayDetailModal({
   const [instrument, setInstrument] = useState('')
   const [scheduleFunctions, setScheduleFunctions] = useState<ScheduleFunctionOption[]>([])
   const [adminProcessing, setAdminProcessing] = useState<string | null>(null)
+  const [showDuplicateForm, setShowDuplicateForm] = useState(false)
+  const [duplicateDate, setDuplicateDate] = useState('')
+  const [duplicating, setDuplicating] = useState(false)
 
   const parsedDate = new Date(date + 'T12:00:00')
   const formattedDate = `${parsedDate.getDate()} de ${MONTHS_PT[parsedDate.getMonth()]} de ${parsedDate.getFullYear()}`
+
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const isPastEvent = selectedEvent.date < todayStr
 
   useEffect(() => {
     async function fetchEventData() {
@@ -129,6 +136,8 @@ export function DayDetailModal({
       setOptimisticConfirmed(mine?.confirmed ?? false)
       setSelectedProfileId('')
       setInstrument('')
+      setShowDuplicateForm(false)
+      setDuplicateDate('')
       setLoading(false)
     }
 
@@ -166,6 +175,27 @@ export function DayDetailModal({
       toast.error(error instanceof Error ? error.message : 'Erro ao excluir evento.')
     } finally {
       setAdminProcessing(null)
+    }
+  }
+
+  async function handleDuplicateEvent(e: React.FormEvent) {
+    e.preventDefault()
+    if (!duplicateDate) {
+      toast.error('Selecione uma data futura para a cópia.')
+      return
+    }
+
+    setDuplicating(true)
+    try {
+      await duplicateEvent(selectedEvent.id, duplicateDate)
+      toast.success('Evento duplicado com sucesso.')
+      setShowDuplicateForm(false)
+      setDuplicateDate('')
+      router.refresh()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao duplicar evento.')
+    } finally {
+      setDuplicating(false)
     }
   }
 
@@ -292,6 +322,16 @@ export function DayDetailModal({
                     triggerLabel="Editar"
                     triggerVariant="ghost"
                   />
+                  {isPastEvent && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDuplicateForm((current) => !current)}
+                      className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-card border border-white/[0.08] text-[#94A3B8] hover:text-white hover:border-white/20 transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                      Duplicar
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleDeleteEvent}
@@ -304,6 +344,43 @@ export function DayDetailModal({
                 </div>
               )}
             </div>
+            {showDuplicateForm && (
+              <form
+                onSubmit={handleDuplicateEvent}
+                className="mb-3 flex flex-col sm:flex-row items-stretch sm:items-end gap-2 rounded-card border border-white/[0.06] bg-navy-800/50 p-3"
+              >
+                <div className="flex-1">
+                  <label htmlFor="duplicate-date" className="block text-xs text-[#94A3B8] mb-1">
+                    Copiar este evento para
+                  </label>
+                  <input
+                    id="duplicate-date"
+                    type="date"
+                    min={todayStr}
+                    value={duplicateDate}
+                    onChange={(e) => setDuplicateDate(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 rounded-card bg-navy-900 border border-white/[0.08] text-white text-sm focus:outline-none focus:border-brand"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={duplicating}
+                    className="px-3 py-2 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors disabled:opacity-60"
+                  >
+                    {duplicating ? 'Duplicando...' : 'Confirmar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDuplicateForm(false)}
+                    className="px-3 py-2 rounded-card border border-white/[0.08] text-[#94A3B8] text-sm hover:bg-white/[0.04] transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
             <div className="grid grid-cols-2 gap-2 mb-3">
               <div className="rounded-card border border-white/[0.06] bg-navy-800/40 px-3 py-2">
                 <p className="text-[10px] uppercase tracking-wide text-[#64748B]">Escala</p>

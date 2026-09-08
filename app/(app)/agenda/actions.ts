@@ -179,6 +179,83 @@ export async function createScale(input: {
   return { eventId, playlist }
 }
 
+/** Copies a past event (its data, escala and setlist) into a new event on a future date. */
+export async function duplicateEvent(eventId: string, newDate: string) {
+  const { supabase } = await requireEditor()
+
+  const today = new Date().toISOString().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate) || newDate < today) {
+    throw new Error('Selecione uma data futura para a cópia do evento.')
+  }
+
+  const { data: sourceEvent, error: eventError } = await supabase
+    .from('events')
+    .select('title, type, arrival_time, start_time, notes, agenda_topic, conductor_id, location, is_online')
+    .eq('id', eventId)
+    .maybeSingle()
+  if (eventError) throw new Error(eventError.message)
+  if (!sourceEvent) throw new Error('Evento não encontrado.')
+
+  const [{ data: memberRows, error: memberError }, { data: songRows, error: songError }] = await Promise.all([
+    supabase.from('event_members').select('profile_id, schedule_function_id').eq('event_id', eventId),
+    supabase
+      .from('setlist_songs')
+      .select('song_title, artist, key_note, moment, soloist_id, version, reference_link, order_index, songs(is_catalog_visible)')
+      .eq('event_id', eventId)
+      .order('order_index'),
+  ])
+  if (memberError) throw new Error(memberError.message)
+  if (songError) throw new Error(songError.message)
+
+  const members = (memberRows ?? [])
+    .filter((row) => Boolean(row.schedule_function_id))
+    .map((row) => ({ profileId: row.profile_id, scheduleFunctionId: row.schedule_function_id as string }))
+
+  const songs = (songRows ?? []).map((row) => ({
+    setlistSongId: crypto.randomUUID(),
+    songId: null,
+    songTitle: row.song_title,
+    artist: row.artist,
+    soloistId: row.soloist_id,
+    keyNote: row.key_note,
+    moment: row.moment,
+    version: row.version,
+    referenceLink: row.reference_link,
+    youtubeVideoId: null,
+    youtubeUrl: null,
+    youtubeThumbnail: null,
+    youtubeDuration: null,
+    lyricsPlain: null,
+    lyricsSynced: null,
+    albumName: null,
+    bpm: null,
+    metadataSource: null,
+    metadataPayload: {},
+    addToGeneralCatalog: row.songs?.is_catalog_visible ?? false,
+  }))
+
+  const { eventId: newEventId } = await createScale({
+    eventId: null,
+    event: {
+      title: sourceEvent.title,
+      type: sourceEvent.type as EventType,
+      date: newDate,
+      arrival_time: sourceEvent.arrival_time,
+      start_time: sourceEvent.start_time,
+      notes: sourceEvent.notes,
+      agenda_topic: sourceEvent.agenda_topic,
+      conductor_id: sourceEvent.conductor_id,
+      location: sourceEvent.location,
+      is_online: sourceEvent.is_online ?? false,
+      meet_link: null,
+    },
+    members,
+    songs,
+  })
+
+  return { eventId: newEventId }
+}
+
 type YoutubeSyncResult = {
   status: 'not_requested' | 'pending' | 'syncing' | 'synced' | 'failed'
   url: string | null

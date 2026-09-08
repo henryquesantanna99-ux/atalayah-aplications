@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { CalendarPlus, Check, Copy, ExternalLink, Music2, Pencil, Plus, Trash2 } from 'lucide-react'
@@ -158,6 +158,22 @@ const emptyForm = {
   meet_link: '',
 }
 
+function formFromEvent(event: CalendarEvent) {
+  return {
+    title: event.title,
+    type: event.type as EventType,
+    date: event.date,
+    arrival_time: event.arrival_time?.slice(0, 5) ?? '',
+    start_time: event.start_time?.slice(0, 5) ?? '',
+    notes: event.notes ?? '',
+    agenda_topic: event.agenda_topic ?? '',
+    conductor_id: event.conductor_id ?? '',
+    location: event.location ?? '',
+    is_online: event.is_online ?? false,
+    meet_link: event.meet_link ?? '',
+  }
+}
+
 function newSongDraft(): EventSongDraft {
   return {
     id: crypto.randomUUID(),
@@ -200,34 +216,31 @@ export function EventFormModal({
   const [saving, setSaving] = useState(false)
   const [saveResult, setSaveResult] = useState<{ url: string | null; status: string; message: string } | null>(null)
   const [loadingExisting, setLoadingExisting] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [catalogSongs, setCatalogSongs] = useState<CatalogSong[]>([])
   const [scheduleFunctions, setScheduleFunctions] = useState<ScheduleFunctionOption[]>([])
   const [legacyAssignments, setLegacyAssignments] = useState<Record<string, string>>({})
+  const [extraProfiles, setExtraProfiles] = useState<ProfileOption[]>([])
   const [catalogLoaded, setCatalogLoaded] = useState(false)
   const [catalogLoadState, setCatalogLoadState] = useState<CatalogLoadState>('idle')
   const [songSearchByDraft, setSongSearchByDraft] = useState<Record<string, string>>({})
   const [musicSearches, setMusicSearches] = useState<Record<string, MusicSearchState>>({})
   const suppressedSearches = useRef(new Set<string>())
   const searchSequence = useRef<Record<string, number>>({})
+  const loadToken = useRef(0)
 
-  const [form, setForm] = useState(() => event
-    ? {
-        title: event.title,
-        type: event.type as EventType,
-        date: event.date,
-        arrival_time: event.arrival_time?.slice(0, 5) ?? '',
-        start_time: event.start_time?.slice(0, 5) ?? '',
-        notes: event.notes ?? '',
-        agenda_topic: event.agenda_topic ?? '',
-        conductor_id: event.conductor_id ?? '',
-        location: event.location ?? '',
-        is_online: event.is_online ?? false,
-        meet_link: event.meet_link ?? '',
-      }
-    : emptyForm
-  )
+  const [form, setForm] = useState(() => event ? formFromEvent(event) : emptyForm)
   const [selectedMembers, setSelectedMembers] = useState<Record<string, string>>({})
   const [songs, setSongs] = useState<EventSongDraft[]>([newSongDraft()])
+
+  // Members/soloists already on the event may have gone inactive since it was
+  // created; keep them selectable in the edit form even though they're no
+  // longer offered when scheduling new events.
+  const memberProfiles = useMemo(() => {
+    const known = new Set(profiles.map((profile) => profile.id))
+    const extras = extraProfiles.filter((profile) => !known.has(profile.id))
+    return extras.length > 0 ? [...profiles, ...extras] : profiles
+  }, [profiles, extraProfiles])
 
   const totalSteps = form.type === 'culto' ? 3 : 2
 
@@ -268,7 +281,7 @@ export function EventFormModal({
   function toggleMember(profile: ProfileOption) {
     setSelectedMembers((current) => {
       const next = { ...current }
-      if (next[profile.id]) {
+      if (profile.id in next) {
         delete next[profile.id]
         return next
       }
@@ -363,7 +376,9 @@ export function EventFormModal({
 
   async function loadExistingEvent() {
     if (!event) return
+    const token = ++loadToken.current
     setLoadingExisting(true)
+    setLoadError(false)
     try {
       const [{ data: memberRows, error: memberError }, { data: songRows, error: songError }, { data: functionRows, error: functionError }] = await Promise.all([
         supabase.from('event_members').select('profile_id, instrument, schedule_function_id').eq('event_id', event.id),
@@ -377,7 +392,39 @@ export function EventFormModal({
       if (memberError) throw memberError
       if (songError) throw songError
       if (functionError) throw functionError
-      setScheduleFunctions((functionRows ?? []) as ScheduleFunctionOption[])
+
+      // Members/soloists whose profile or schedule function was deactivated after
+      // being scheduled must still show up (and stay selectable) in the edit form.
+      const knownProfileIds = new Set(profiles.map((profile) => profile.id))
+      const missingProfileIds = Array.from(new Set(
+        [
+          ...(memberRows ?? []).map((row) => row.profile_id),
+          ...(songRows ?? []).map((row) => row.soloist_id),
+          event.conductor_id,
+        ].filter((id): id is string => Boolean(id) && !knownProfileIds.has(id as string))
+      ))
+      let extraProfilesData: { id: string; full_name: string | null }[] = []
+      if (missingProfileIds.length > 0) {
+        const { data } = await supabase.from('profiles').select('id, full_name').in('id', missingProfileIds)
+        extraProfilesData = data ?? []
+      }
+
+      const activeFunctionIds = new Set((functionRows ?? []).map((fn) => fn.id))
+      const missingFunctionIds = Array.from(new Set(
+        (memberRows ?? [])
+          .map((row) => row.schedule_function_id)
+          .filter((id): id is string => Boolean(id) && !activeFunctionIds.has(id as string))
+      ))
+      let extraFunctionsData: ScheduleFunctionOption[] = []
+      if (missingFunctionIds.length > 0) {
+        const { data } = await supabase.from('schedule_functions').select('id, display_name, category, is_active').in('id', missingFunctionIds)
+        extraFunctionsData = (data ?? []) as ScheduleFunctionOption[]
+      }
+
+      if (loadToken.current !== token) return
+
+      setExtraProfiles(extraProfilesData as ProfileOption[])
+      setScheduleFunctions([...(functionRows ?? []), ...extraFunctionsData] as ScheduleFunctionOption[])
       setSelectedMembers(Object.fromEntries((memberRows ?? []).map((row) => [row.profile_id, row.schedule_function_id ?? ''])))
       setLegacyAssignments(Object.fromEntries((memberRows ?? [])
         .filter((row) => !row.schedule_function_id && row.instrument)
@@ -408,10 +455,15 @@ export function EventFormModal({
             isFromGeneralCatalog: row.songs?.is_catalog_visible ?? false,
           }))
         : [newSongDraft()])
+      // Re-sync the base fields too, so the form always reflects this event's
+      // current data rather than whatever was in state from a previous open.
+      setForm(formFromEvent(event))
     } catch (error) {
+      if (loadToken.current !== token) return
+      setLoadError(true)
       toast.error(error instanceof Error ? error.message : 'Erro ao carregar a escala do evento.')
     } finally {
-      setLoadingExisting(false)
+      if (loadToken.current === token) setLoadingExisting(false)
     }
   }
 
@@ -424,9 +476,12 @@ export function EventFormModal({
     setOpen(val)
     if (val && event) void loadExistingEvent()
     if (!val) {
+      loadToken.current += 1
       setStep(1)
       setSelectedMembers({})
       setLegacyAssignments({})
+      setExtraProfiles([])
+      setLoadError(false)
       setSongs([newSongDraft()])
       setSongSearchByDraft({})
       setSaveResult(null)
@@ -573,11 +628,16 @@ export function EventFormModal({
 
         {loadingExisting ? (
           <p className="py-8 text-center text-sm text-[#94A3B8]">Carregando evento...</p>
+        ) : loadError ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-red-300" role="alert">Não foi possível carregar os dados do evento.</p>
+            <button type="button" onClick={() => void loadExistingEvent()} className="mt-3 rounded-card border border-white/[0.08] px-3 py-1.5 text-xs text-white hover:bg-white/[0.04]">Tentar novamente</button>
+          </div>
         ) : (
           <div className="space-y-5 mt-2">
             {step === 1 && (
               <div className="space-y-4">
-                <Step1Fields form={form} profiles={profiles} onChange={handleChange} inputClass={inputClass} />
+                <Step1Fields form={form} profiles={memberProfiles} onChange={handleChange} inputClass={inputClass} />
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setOpen(false)} className="flex-1 py-2.5 rounded-card border border-white/[0.08] text-[#94A3B8] text-sm hover:bg-white/[0.04] transition-colors">Cancelar</button>
                   <button type="button" onClick={handleNext} className="flex-1 py-2.5 rounded-card bg-brand text-white text-sm font-medium hover:bg-brand-light transition-colors">Próximo →</button>
@@ -588,18 +648,20 @@ export function EventFormModal({
             {step === 2 && (
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-white">Membros da Escala</h3>
-                {profiles.length === 0 ? (
+                {memberProfiles.length === 0 ? (
                   <p className="text-sm text-[#64748B]">Nenhum membro ativo cadastrado.</p>
                 ) : (
                   <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                    {profiles.map((profile) => {
+                    {memberProfiles.map((profile) => {
                       const checked = profile.id in selectedMembers
                       const legacyValue = legacyAssignments[profile.id]
+                      const isInactive = extraProfiles.some((extra) => extra.id === profile.id)
                       return (
                         <div key={profile.id} className="grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-2 rounded-card border border-white/[0.06] bg-navy-800/50 p-3">
                           <label className="flex items-center gap-2 text-sm text-white">
                             <input type="checkbox" checked={checked} onChange={() => toggleMember(profile)} disabled={scheduleFunctions.length === 0} className="h-4 w-4 rounded border-white/[0.08] accent-brand" />
                             <span>{profile.full_name ?? 'Sem nome'}</span>
+                            {isInactive && <span className="text-xs text-[#64748B]">(inativo)</span>}
                             {legacyValue && <span className="text-xs text-amber-300">corrigir: “{legacyValue}”</span>}
                           </label>
                           <select
@@ -716,7 +778,7 @@ export function EventFormModal({
                             <input value={draft.artist} onChange={(event) => updateSongField(draft.id, 'artist', event.target.value)} placeholder="Artista" className={inputSmClass} />
                             <select value={draft.keyNote} onChange={(event) => updateSongField(draft.id, 'keyNote', event.target.value)} className={inputSmClass}><option value="">Tom</option>{KEYS.map((key) => <option key={key} value={key}>{key}</option>)}</select>
                             <select value={draft.moment} onChange={(event) => updateSongField(draft.id, 'moment', event.target.value)} className={inputSmClass}><option value="">Momento</option>{MOMENTS.map((moment) => <option key={moment} value={moment}>{moment}</option>)}</select>
-                            <select value={draft.soloistId} onChange={(event) => updateSongField(draft.id, 'soloistId', event.target.value)} className={inputSmClass}><option value="">Solista</option>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name}</option>)}</select>
+                            <select value={draft.soloistId} onChange={(event) => updateSongField(draft.id, 'soloistId', event.target.value)} className={inputSmClass}><option value="">Solista</option>{memberProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.full_name}</option>)}</select>
                             <input value={draft.version} onChange={(event) => updateSongField(draft.id, 'version', event.target.value)} placeholder="Versão" className={inputSmClass} />
                             <input value={draft.youtubeUrl} onChange={(event) => updateSongField(draft.id, 'youtubeUrl', event.target.value)} type="url" placeholder="Link do YouTube" className={inputSmClass} />
                           </div>
