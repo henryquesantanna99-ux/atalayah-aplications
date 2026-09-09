@@ -196,7 +196,7 @@ function newSongDraft(): EventSongDraft {
     metadataSource: null,
     metadataPayload: {},
     lrclibId: null,
-    addToGeneralCatalog: false,
+    addToGeneralCatalog: true,
     isFromGeneralCatalog: false,
   }
 }
@@ -766,7 +766,7 @@ export function EventFormModal({
                               onChange={(event) => updateSongField(draft.id, 'addToGeneralCatalog', event.target.checked)}
                               className="h-3.5 w-3.5 rounded border-white/[0.08] accent-brand"
                             />
-                            <span>Adicionar ao setlist geral</span>
+                            <span>Manter no catálogo geral (menu Músicas)</span>
                             {draft.addToGeneralCatalog && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
                           </label>
                           <div className="flex items-center justify-between">
