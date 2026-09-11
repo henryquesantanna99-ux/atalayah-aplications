@@ -20,27 +20,25 @@ jobs:
         with:
           version: latest
 
-      - name: Inspect conflicting/relevant tables
+      - name: Inspect remaining columns before deciding on --include-all
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           psql "$SUPABASE_DB_URL" -c "
-            select table_name, column_name, data_type
-            from information_schema.columns
-            where table_schema = 'public'
-              and table_name in (
-                'automation_workflows', 'automation_executions', 'automation_jobs',
-                'automation_runs', 'schedule_functions', 'repertoire_readiness',
-                'repertoire_item_analyses', 'repertoire_readiness_analyses',
-                'repertoire_analyses'
-              )
-            order by table_name, ordinal_position;
+            select 'songs.team_mastery' as check, exists (
+              select 1 from information_schema.columns
+              where table_schema='public' and table_name='songs' and column_name='team_mastery'
+            ) as exists;
           "
-          echo '---'
           psql "$SUPABASE_DB_URL" -c "
-            select table_name
-            from information_schema.tables
-            where table_schema = 'public'
-              and table_name like 'automation_%'
-            order by table_name;
+            select 'worship_song_suggestions.region' as check, exists (
+              select 1 from information_schema.columns
+              where table_schema='public' and table_name='worship_song_suggestions' and column_name='region'
+            ) as exists;
+          "
+          psql "$SUPABASE_DB_URL" -c "
+            select 'song_musical_analyses.ici_score' as check, exists (
+              select 1 from information_schema.columns
+              where table_schema='public' and table_name='song_musical_analyses' and column_name='ici_score'
+            ) as exists;
           "
