@@ -1,8 +1,8 @@
 name: Repair Supabase migration history (one-off)
 
 # Manual-only. Final step of reconciling the duplicate-prefix migration mess:
-# - 059 (renamed from 036_schedule_function_taxonomy.sql) is already live —
-#   mark it applied without re-running its SQL.
+# - 059 (schedule_function_taxonomy) and 060 (automation_workflows) are
+#   already live — mark them applied without re-running their SQL.
 # - 054-058 are genuinely missing, confirmed safe to apply for real.
 # The two abandoned/incompatible automation designs (037_automation_runtime.sql,
 # 037_automation_webhook_test_sessions.sql) were deleted in this same PR —
@@ -29,10 +29,10 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
 
-      - name: Mark 059 (schedule_function_taxonomy) as already applied
+      - name: Mark 059 (schedule_function_taxonomy) and 060 (automation_workflows) as already applied
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase migration repair --status applied 059
+        run: supabase migration repair --status applied 059 060
 
       - name: Apply the 5 genuinely missing migrations (054-058)
         env:
