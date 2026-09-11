@@ -1,0 +1,43 @@
+name: Repair Supabase migration history (one-off)
+
+# Manual-only. The production Supabase project already has the full schema
+# (001-053) applied — it was executed outside the CLI (manually, via the SQL
+# editor), so `supabase_migrations.schema_migrations` never recorded it.
+# This marks 001-053 as already applied without re-running any SQL, so future
+# `supabase db push` runs only touch genuinely new migrations (054+).
+# Delete this workflow file once it has been run successfully.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+
+      - name: Migration status before repair
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase migration list --linked
+
+      - name: Mark 001-053 as already applied
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase migration repair --status applied $(seq -f "%03g" 1 53)
+
+      - name: Migration status after repair
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase migration list --linked
