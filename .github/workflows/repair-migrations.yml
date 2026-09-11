@@ -1,9 +1,8 @@
 name: Repair Supabase migration history (one-off)
 
-# Manual-only, read-only diagnostic: checking exactly what
-# validate_production_schema.sql found missing (migration 050's effects),
-# and scanning for other 001-053 migrations that may be marked applied
-# but never actually ran.
+# Manual-only, read-only diagnostic: checking whether 051's and 052's
+# effects actually exist (051 confirmed incomplete: is_catalog_visible
+# is missing even though tracking says it's applied).
 on:
   workflow_dispatch: {}
 
@@ -20,28 +19,25 @@ jobs:
         with:
           version: latest
 
-      - name: Check migration 050/051/052 effects
+      - name: Check 051 and 052 effects
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
+          echo '--- 051: song_variations_catalog_identity_unique index ---'
+          psql "$SUPABASE_DB_URL" -c "select to_regclass('public.song_variations_catalog_identity_unique') as exists;"
+          echo '--- 052: events.youtube_playlist_* columns ---'
           psql "$SUPABASE_DB_URL" -c "
             select column_name from information_schema.columns
-            where table_schema='public' and table_name='songs'
-              and column_name in ('normalized_title','normalized_artist','is_catalog_visible');
+            where table_schema='public' and table_name='events'
+              and column_name like 'youtube_playlist%';
           "
+          echo '--- organizations / organization_members tables ---'
           psql "$SUPABASE_DB_URL" -c "
-            select to_regclass('public.songs_normalized_identity_unique') as index_exists;
-          "
-          psql "$SUPABASE_DB_URL" -c "
-            select to_regprocedure('public.save_event_scale(uuid,jsonb,jsonb,jsonb)') as function_exists;
-          "
-
-      - name: List all public tables actually in production
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: |
-          psql "$SUPABASE_DB_URL" -t -c "
             select table_name from information_schema.tables
-            where table_schema = 'public' order by table_name;
-          " > /tmp/live_tables.txt
-          cat /tmp/live_tables.txt
+            where table_schema='public' and table_name in ('organizations','organization_members');
+          "
+          echo '--- ycloud tables ---'
+          psql "$SUPABASE_DB_URL" -c "
+            select table_name from information_schema.tables
+            where table_schema='public' and table_name in ('ycloud_sync_checkpoints','ycloud_webhook_events');
+          "
