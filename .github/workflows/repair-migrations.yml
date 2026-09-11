@@ -1,11 +1,9 @@
 name: Repair Supabase migration history (one-off)
 
-# Manual-only. The production Supabase project already has the full schema
-# (001-053) applied — it was executed outside the CLI (manually, via the SQL
-# editor), so `supabase_migrations.schema_migrations` never recorded it.
-# This marks 001-053 as already applied without re-running any SQL, so future
-# `supabase db push` runs only touch genuinely new migrations (054+).
-# Delete this workflow file once it has been run successfully.
+# Manual-only. Currently used as a read-only diagnostic step: inspecting
+# which of the conflicting 037_automation_* table definitions actually
+# exists in production before deciding how to reconcile migration history.
+# Delete this workflow file once the migration history repair is finished.
 on:
   workflow_dispatch: {}
 
@@ -22,22 +20,27 @@ jobs:
         with:
           version: latest
 
-      - name: Link project
+      - name: Inspect conflicting/relevant tables
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
-
-      - name: Migration status before repair
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase migration list --linked
-
-      - name: Mark 001-053 as already applied
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase migration repair --status applied $(seq -f "%03g" 1 53)
-
-      - name: Migration status after repair
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase migration list --linked
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          psql "$SUPABASE_DB_URL" -c "
+            select table_name, column_name, data_type
+            from information_schema.columns
+            where table_schema = 'public'
+              and table_name in (
+                'automation_workflows', 'automation_executions', 'automation_jobs',
+                'automation_runs', 'schedule_functions', 'repertoire_readiness',
+                'repertoire_item_analyses', 'repertoire_readiness_analyses',
+                'repertoire_analyses'
+              )
+            order by table_name, ordinal_position;
+          "
+          echo '---'
+          psql "$SUPABASE_DB_URL" -c "
+            select table_name
+            from information_schema.tables
+            where table_schema = 'public'
+              and table_name like 'automation_%'
+            order by table_name;
+          "
