@@ -71,19 +71,22 @@ export default async function EstudoPage() {
             )}
           </Link>
 
-          {/* Card 2: Uma música específica (em desenvolvimento) */}
-          <div className="rounded-modal border border-white/[0.04] bg-navy-900/50 p-6 space-y-4 opacity-50 cursor-not-allowed">
+          {/* Card 2: Uma música específica */}
+          <Link
+            href="/estudo/musica"
+            className="group rounded-modal border border-white/[0.08] bg-navy-900 p-6 hover:border-brand/40 hover:bg-brand/5 transition-all space-y-4"
+          >
             <div className="flex items-start justify-between">
-              <div className="w-12 h-12 rounded-xl bg-white/[0.04] flex items-center justify-center">
-                <Guitar className="w-6 h-6 text-[#64748B]" />
+              <div className="w-12 h-12 rounded-xl bg-brand/15 flex items-center justify-center">
+                <Guitar className="w-6 h-6 text-brand" />
               </div>
-              <span className="text-[10px] text-[#64748B] bg-white/[0.06] px-2 py-0.5 rounded-full">em breve</span>
+              <ChevronRight className="w-5 h-5 text-[#64748B] group-hover:text-brand transition-colors mt-1" />
             </div>
             <div>
               <h3 className="text-base font-semibold text-white">Uma música específica</h3>
-              <p className="text-sm text-[#64748B] mt-1">Estude qualquer música do catálogo individualmente</p>
+              <p className="text-sm text-[#94A3B8] mt-1">Envie um áudio e estude a música seção por seção</p>
             </div>
-          </div>
+          </Link>
 
           {/* Card 3: Técnica & Teoria (em desenvolvimento) */}
           <div className="rounded-modal border border-white/[0.04] bg-navy-900/50 p-6 space-y-4 opacity-50 cursor-not-allowed">
