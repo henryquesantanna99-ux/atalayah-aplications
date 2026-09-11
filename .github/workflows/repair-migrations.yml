@@ -1,8 +1,14 @@
 name: Repair Supabase migration history (one-off)
 
-# Manual-only, read-only diagnostic: checking whether 051's and 052's
-# effects actually exist (051 confirmed incomplete: is_catalog_visible
-# is missing even though tracking says it's applied).
+# Manual-only. Applies the real content of what used to be
+# 051_general_setlist_visibility.sql (renamed to 061 — its old version
+# number was already falsely marked "applied" by the initial bulk
+# history repair, so it needed a fresh, higher version to actually run).
+# Confirmed missing: songs.is_catalog_visible. Since 061 > the current
+# max applied version (060), a plain `db push` (no --include-all) is
+# expected to pick it up normally — this doubles as a sanity check that
+# future ordinary migrations will apply cleanly through the real deploy
+# pipeline. Delete this workflow file once this has run successfully.
 on:
   workflow_dispatch: {}
 
@@ -19,25 +25,27 @@ jobs:
         with:
           version: 2.117.0
 
-      - name: Check 051 and 052 effects
+      - name: Link project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+
+      - name: Apply migration 061 (was 051_general_setlist_visibility)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase db push --linked --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+
+      - name: Migration status after apply
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase migration list --linked
+
+      - name: Verify songs.is_catalog_visible now exists
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          echo '--- 051: song_variations_catalog_identity_unique index ---'
-          psql "$SUPABASE_DB_URL" -c "select to_regclass('public.song_variations_catalog_identity_unique') as exists;"
-          echo '--- 052: events.youtube_playlist_* columns ---'
           psql "$SUPABASE_DB_URL" -c "
             select column_name from information_schema.columns
-            where table_schema='public' and table_name='events'
-              and column_name like 'youtube_playlist%';
-          "
-          echo '--- organizations / organization_members tables ---'
-          psql "$SUPABASE_DB_URL" -c "
-            select table_name from information_schema.tables
-            where table_schema='public' and table_name in ('organizations','organization_members');
-          "
-          echo '--- ycloud tables ---'
-          psql "$SUPABASE_DB_URL" -c "
-            select table_name from information_schema.tables
-            where table_schema='public' and table_name in ('ycloud_sync_checkpoints','ycloud_webhook_events');
+            where table_schema='public' and table_name='songs'
+              and column_name in ('normalized_title','normalized_artist','is_catalog_visible');
           "
