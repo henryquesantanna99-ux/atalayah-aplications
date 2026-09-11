@@ -919,6 +919,86 @@ export interface Database {
         Update: { status?: 'pending' | 'processed' | 'failed'; attempts?: number; last_error?: string | null; processed_at?: string | null }
         Relationships: []
       }
+      song_audio_versions: {
+        Row: { id: string; song_id: string | null; audio_hash: string; storage_path: string; duration_seconds: number | null; sample_rate: number | null; channels: number | null; file_format: string | null; file_size_bytes: number | null; first_uploaded_by: string | null; status: 'uploaded' | 'identifying' | 'needs_manual_lyrics' | 'processing' | 'ready' | 'failed'; error_message: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; song_id?: string | null; audio_hash: string; storage_path: string; duration_seconds?: number | null; sample_rate?: number | null; channels?: number | null; file_format?: string | null; file_size_bytes?: number | null; first_uploaded_by?: string | null; status?: 'uploaded' | 'identifying' | 'needs_manual_lyrics' | 'processing' | 'ready' | 'failed'; error_message?: string | null; created_at?: string; updated_at?: string }
+        Update: { song_id?: string | null; status?: 'uploaded' | 'identifying' | 'needs_manual_lyrics' | 'processing' | 'ready' | 'failed'; error_message?: string | null; duration_seconds?: number | null; sample_rate?: number | null; channels?: number | null; file_format?: string | null; file_size_bytes?: number | null; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: 'song_audio_versions_song_id_fkey'; columns: ['song_id']; referencedRelation: 'songs'; referencedColumns: ['id'] }
+        ]
+      }
+      song_study_identifications: {
+        Row: { id: string; version_id: string; attempt: number; candidate_song_id: string | null; candidate_title: string | null; candidate_artist: string | null; candidate_lyrics_excerpt: string | null; rejected_song_ids: Json; status: 'pending' | 'confirmed' | 'manual_lyrics'; created_at: string; updated_at: string }
+        Insert: { id?: string; version_id: string; attempt?: number; candidate_song_id?: string | null; candidate_title?: string | null; candidate_artist?: string | null; candidate_lyrics_excerpt?: string | null; rejected_song_ids?: Json; status?: 'pending' | 'confirmed' | 'manual_lyrics'; created_at?: string; updated_at?: string }
+        Update: { attempt?: number; candidate_song_id?: string | null; candidate_title?: string | null; candidate_artist?: string | null; candidate_lyrics_excerpt?: string | null; rejected_song_ids?: Json; status?: 'pending' | 'confirmed' | 'manual_lyrics'; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: 'song_study_identifications_version_id_fkey'; columns: ['version_id']; referencedRelation: 'song_audio_versions'; referencedColumns: ['id'] }
+        ]
+      }
+      song_audio_analyses: {
+        Row: { id: string; version_id: string; bpm: number | null; key_note: string | null; mode: string | null; key_confidence: number | null; time_signature: string | null; midi_storage_path: string | null; analyzer_version: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; version_id: string; bpm?: number | null; key_note?: string | null; mode?: string | null; key_confidence?: number | null; time_signature?: string | null; midi_storage_path?: string | null; analyzer_version?: string | null; created_at?: string; updated_at?: string }
+        Update: { bpm?: number | null; key_note?: string | null; mode?: string | null; key_confidence?: number | null; time_signature?: string | null; midi_storage_path?: string | null; analyzer_version?: string | null; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: 'song_audio_analyses_version_id_fkey'; columns: ['version_id']; referencedRelation: 'song_audio_versions'; referencedColumns: ['id'] }
+        ]
+      }
+      song_chord_events: {
+        Row: { id: string; version_id: string; start_time: number; end_time: number; bar: number | null; beat: number | null; chord: string; confidence: number | null; evidence: Json; source: 'algorithm' | 'gemini_validated'; created_at: string }
+        Insert: { id?: string; version_id: string; start_time: number; end_time: number; bar?: number | null; beat?: number | null; chord: string; confidence?: number | null; evidence?: Json; source?: 'algorithm' | 'gemini_validated'; created_at?: string }
+        Update: { start_time?: number; end_time?: number; bar?: number | null; beat?: number | null; chord?: string; confidence?: number | null; evidence?: Json; source?: 'algorithm' | 'gemini_validated' }
+        Relationships: [
+          { foreignKeyName: 'song_chord_events_version_id_fkey'; columns: ['version_id']; referencedRelation: 'song_audio_versions'; referencedColumns: ['id'] }
+        ]
+      }
+      song_structure_segments: {
+        Row: { id: string; version_id: string; segment_key: 'intro' | 'verso' | 'pre_refrao' | 'refrao' | 'ponte' | 'final' | 'outro'; order_index: number; start_time: number; end_time: number; label: string | null; created_at: string }
+        Insert: { id?: string; version_id: string; segment_key: 'intro' | 'verso' | 'pre_refrao' | 'refrao' | 'ponte' | 'final' | 'outro'; order_index: number; start_time: number; end_time: number; label?: string | null; created_at?: string }
+        Update: { segment_key?: 'intro' | 'verso' | 'pre_refrao' | 'refrao' | 'ponte' | 'final' | 'outro'; order_index?: number; start_time?: number; end_time?: number; label?: string | null }
+        Relationships: [
+          { foreignKeyName: 'song_structure_segments_version_id_fkey'; columns: ['version_id']; referencedRelation: 'song_audio_versions'; referencedColumns: ['id'] }
+        ]
+      }
+      song_lyric_timestamps: {
+        Row: { id: string; version_id: string; line_index: number; word_index: number; text: string; start_time: number; end_time: number; created_at: string }
+        Insert: { id?: string; version_id: string; line_index: number; word_index: number; text: string; start_time: number; end_time: number; created_at?: string }
+        Update: { line_index?: number; word_index?: number; text?: string; start_time?: number; end_time?: number }
+        Relationships: [
+          { foreignKeyName: 'song_lyric_timestamps_version_id_fkey'; columns: ['version_id']; referencedRelation: 'song_audio_versions'; referencedColumns: ['id'] }
+        ]
+      }
+      song_study_charts: {
+        Row: { id: string; version_id: string; difficulty_level: 'iniciante' | 'intermediario' | 'avancado'; content_json: Json | null; plain_text: string | null; pdf_storage_path: string | null; validated_by_ai: boolean; created_at: string; updated_at: string }
+        Insert: { id?: string; version_id: string; difficulty_level: 'iniciante' | 'intermediario' | 'avancado'; content_json?: Json | null; plain_text?: string | null; pdf_storage_path?: string | null; validated_by_ai?: boolean; created_at?: string; updated_at?: string }
+        Update: { content_json?: Json | null; plain_text?: string | null; pdf_storage_path?: string | null; validated_by_ai?: boolean; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: 'song_study_charts_version_id_fkey'; columns: ['version_id']; referencedRelation: 'song_audio_versions'; referencedColumns: ['id'] }
+        ]
+      }
+      song_study_processing_jobs: {
+        Row: { id: string; version_id: string; stage: 'identify' | 'analyze' | 'chart' | 'explain'; status: 'pending' | 'processing' | 'completed' | 'failed'; error_message: string | null; started_at: string | null; finished_at: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; version_id: string; stage: 'identify' | 'analyze' | 'chart' | 'explain'; status?: 'pending' | 'processing' | 'completed' | 'failed'; error_message?: string | null; started_at?: string | null; finished_at?: string | null; created_at?: string; updated_at?: string }
+        Update: { status?: 'pending' | 'processing' | 'completed' | 'failed'; error_message?: string | null; started_at?: string | null; finished_at?: string | null; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: 'song_study_processing_jobs_version_id_fkey'; columns: ['version_id']; referencedRelation: 'song_audio_versions'; referencedColumns: ['id'] }
+        ]
+      }
+      song_study_sessions: {
+        Row: { id: string; user_id: string; version_id: string; song_id: string | null; level: 'iniciante' | 'intermediario' | 'avancado'; instrument: string; stage: 'registrar' | 'estruturar' | 'guardar' | 'exercitar' | 'realizar'; progress: Json; status: 'active' | 'completed' | 'abandoned'; created_at: string; updated_at: string }
+        Insert: { id?: string; user_id: string; version_id: string; song_id?: string | null; level: 'iniciante' | 'intermediario' | 'avancado'; instrument: string; stage?: 'registrar' | 'estruturar' | 'guardar' | 'exercitar' | 'realizar'; progress?: Json; status?: 'active' | 'completed' | 'abandoned'; created_at?: string; updated_at?: string }
+        Update: { level?: 'iniciante' | 'intermediario' | 'avancado'; instrument?: string; stage?: 'registrar' | 'estruturar' | 'guardar' | 'exercitar' | 'realizar'; progress?: Json; status?: 'active' | 'completed' | 'abandoned'; updated_at?: string }
+        Relationships: [
+          { foreignKeyName: 'song_study_sessions_version_id_fkey'; columns: ['version_id']; referencedRelation: 'song_audio_versions'; referencedColumns: ['id'] }
+        ]
+      }
+      song_study_recordings: {
+        Row: { id: string; session_id: string; user_id: string; kind: 'ensaio' | 'ministracao'; storage_path: string; duration_seconds: number; instrument_detected: string | null; feedback: Json | null; analyzed_at: string | null; created_at: string }
+        Insert: { id?: string; session_id: string; user_id: string; kind: 'ensaio' | 'ministracao'; storage_path: string; duration_seconds: number; instrument_detected?: string | null; feedback?: Json | null; analyzed_at?: string | null; created_at?: string }
+        Update: { instrument_detected?: string | null; feedback?: Json | null; analyzed_at?: string | null }
+        Relationships: [
+          { foreignKeyName: 'song_study_recordings_session_id_fkey'; columns: ['session_id']; referencedRelation: 'song_study_sessions'; referencedColumns: ['id'] }
+        ]
+      }
     } & SentinelaTables
     Views: Record<string, never>
     Functions: {
@@ -994,6 +1074,24 @@ export type LaiaMessage = Database['public']['Tables']['laia_messages']['Row']
 export type LaiaMessageInsert = Database['public']['Tables']['laia_messages']['Insert']
 
 export type LaiaUsage = Database['public']['Tables']['laia_usage']['Row']
+
+export type SongAudioVersion = Database['public']['Tables']['song_audio_versions']['Row']
+export type SongAudioVersionInsert = Database['public']['Tables']['song_audio_versions']['Insert']
+export type SongAudioVersionUpdate = Database['public']['Tables']['song_audio_versions']['Update']
+export type SongStudyIdentification = Database['public']['Tables']['song_study_identifications']['Row']
+export type SongAudioAnalysis = Database['public']['Tables']['song_audio_analyses']['Row']
+export type SongChordEvent = Database['public']['Tables']['song_chord_events']['Row']
+export type SongStructureSegment = Database['public']['Tables']['song_structure_segments']['Row']
+export type SongLyricTimestamp = Database['public']['Tables']['song_lyric_timestamps']['Row']
+export type SongStudyChart = Database['public']['Tables']['song_study_charts']['Row']
+export type SongStudyProcessingJob = Database['public']['Tables']['song_study_processing_jobs']['Row']
+export type SongStudySession = Database['public']['Tables']['song_study_sessions']['Row']
+export type SongStudySessionInsert = Database['public']['Tables']['song_study_sessions']['Insert']
+export type SongStudyRecording = Database['public']['Tables']['song_study_recordings']['Row']
+export type SongStudyRecordingInsert = Database['public']['Tables']['song_study_recordings']['Insert']
+
+export type StudyLevel = SongStudySession['level']
+export type StudyStage = SongStudySession['stage']
 
 export interface SongVariationWithDetails extends SongVariation {
   songs: Pick<Song, 'id' | 'title' | 'artist' | 'team_mastery' | 'youtube_video_id' | 'youtube_url' | 'youtube_thumbnail' | 'youtube_duration' | 'bpm' | 'default_key' | 'album_name' | 'lyrics_plain' | 'lyrics_synced' | 'metadata_source' | 'metadata_payload'>
