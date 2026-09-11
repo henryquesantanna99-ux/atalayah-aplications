@@ -1,9 +1,11 @@
 name: Repair Supabase migration history (one-off)
 
-# Manual-only. Currently used as a read-only diagnostic step: inspecting
-# which of the conflicting 037_automation_* table definitions actually
-# exists in production before deciding how to reconcile migration history.
-# Delete this workflow file once the migration history repair is finished.
+# Manual-only. Applies the 8 migrations (032/036/037 duplicate-prefix files)
+# that were never actually run against production, confirmed safe via
+# read-only inspection (their tables don't exist yet, and their ALTER
+# statements use IF NOT EXISTS). Delete this workflow file once this has
+# run successfully — --include-all should never be part of the normal
+# deploy pipeline.
 on:
   workflow_dispatch: {}
 
@@ -20,25 +22,32 @@ jobs:
         with:
           version: latest
 
-      - name: Inspect remaining columns before deciding on --include-all
+      - name: Link project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+
+      - name: Apply the 8 missing migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase db push --linked --include-all --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+
+      - name: Migration status after apply
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase migration list --linked
+
+      - name: Validate PostgREST schema cache picked up the new columns
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          psql "$SUPABASE_DB_URL" -c "
-            select 'songs.team_mastery' as check, exists (
-              select 1 from information_schema.columns
-              where table_schema='public' and table_name='songs' and column_name='team_mastery'
-            ) as exists;
-          "
-          psql "$SUPABASE_DB_URL" -c "
-            select 'worship_song_suggestions.region' as check, exists (
-              select 1 from information_schema.columns
-              where table_schema='public' and table_name='worship_song_suggestions' and column_name='region'
-            ) as exists;
-          "
-          psql "$SUPABASE_DB_URL" -c "
-            select 'song_musical_analyses.ici_score' as check, exists (
-              select 1 from information_schema.columns
-              where table_schema='public' and table_name='song_musical_analyses' and column_name='ici_score'
-            ) as exists;
-          "
+          status="$({ curl --silent --show-error --output /tmp/schema-check.json --write-out '%{http_code}' \
+            --get "${NEXT_PUBLIC_SUPABASE_URL%/}/rest/v1/songs" \
+            --data-urlencode 'select=team_mastery' \
+            --data-urlencode 'limit=0' \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"; } || true)"
+          echo "HTTP $status"
+          cat /tmp/schema-check.json
