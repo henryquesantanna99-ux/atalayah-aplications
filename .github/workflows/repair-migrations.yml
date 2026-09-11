@@ -1,13 +1,9 @@
 name: Repair Supabase migration history (one-off)
 
-# Manual-only. Final step of reconciling the duplicate-prefix migration mess:
-# - 059 (schedule_function_taxonomy) and 060 (automation_workflows) are
-#   already live — mark them applied without re-running their SQL.
-# - 054-058 are genuinely missing, confirmed safe to apply for real.
-# The two abandoned/incompatible automation designs (037_automation_runtime.sql,
-# 037_automation_webhook_test_sessions.sql) were deleted in this same PR —
-# the automation job-queue feature isn't in real use yet.
-# Delete this workflow file once it has run successfully.
+# Manual-only, read-only diagnostic: checking exactly what
+# validate_production_schema.sql found missing (migration 050's effects),
+# and scanning for other 001-053 migrations that may be marked applied
+# but never actually ran.
 on:
   workflow_dispatch: {}
 
@@ -24,36 +20,28 @@ jobs:
         with:
           version: latest
 
-      - name: Link project
+      - name: Check migration 050/051/052 effects
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
-
-      - name: Mark 059 (schedule_function_taxonomy) and 060 (automation_workflows) as already applied
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase migration repair --status applied 059 060
-
-      - name: Apply the 5 genuinely missing migrations (054-058)
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase db push --linked --include-all --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
-
-      - name: Migration status after repair + push
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase migration list --linked
-
-      - name: Validate PostgREST schema cache picked up the new columns
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          status="$({ curl --silent --show-error --output /tmp/schema-check.json --write-out '%{http_code}' \
-            --get "${NEXT_PUBLIC_SUPABASE_URL%/}/rest/v1/songs" \
-            --data-urlencode 'select=team_mastery' \
-            --data-urlencode 'limit=0' \
-            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY"; } || true)"
-          echo "HTTP $status"
-          cat /tmp/schema-check.json
+          psql "$SUPABASE_DB_URL" -c "
+            select column_name from information_schema.columns
+            where table_schema='public' and table_name='songs'
+              and column_name in ('normalized_title','normalized_artist','is_catalog_visible');
+          "
+          psql "$SUPABASE_DB_URL" -c "
+            select to_regclass('public.songs_normalized_identity_unique') as index_exists;
+          "
+          psql "$SUPABASE_DB_URL" -c "
+            select to_regprocedure('public.save_event_scale(uuid,jsonb,jsonb,jsonb)') as function_exists;
+          "
+
+      - name: List all public tables actually in production
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          psql "$SUPABASE_DB_URL" -t -c "
+            select table_name from information_schema.tables
+            where table_schema = 'public' order by table_name;
+          " > /tmp/live_tables.txt
+          cat /tmp/live_tables.txt
