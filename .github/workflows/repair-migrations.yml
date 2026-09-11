@@ -1,11 +1,13 @@
 name: Repair Supabase migration history (one-off)
 
-# Manual-only. Applies the 8 migrations (032/036/037 duplicate-prefix files)
-# that were never actually run against production, confirmed safe via
-# read-only inspection (their tables don't exist yet, and their ALTER
-# statements use IF NOT EXISTS). Delete this workflow file once this has
-# run successfully — --include-all should never be part of the normal
-# deploy pipeline.
+# Manual-only. Final step of reconciling the duplicate-prefix migration mess:
+# - 059 (renamed from 036_schedule_function_taxonomy.sql) is already live —
+#   mark it applied without re-running its SQL.
+# - 054-058 are genuinely missing, confirmed safe to apply for real.
+# The two abandoned/incompatible automation designs (037_automation_runtime.sql,
+# 037_automation_webhook_test_sessions.sql) were deleted in this same PR —
+# the automation job-queue feature isn't in real use yet.
+# Delete this workflow file once it has run successfully.
 on:
   workflow_dispatch: {}
 
@@ -27,19 +29,23 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
 
-      - name: Apply the 8 missing migrations
+      - name: Mark 059 (schedule_function_taxonomy) as already applied
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase migration repair --status applied 059
+
+      - name: Apply the 5 genuinely missing migrations (054-058)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase db push --linked --include-all --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
 
-      - name: Migration status after apply
+      - name: Migration status after repair + push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: supabase migration list --linked
 
       - name: Validate PostgREST schema cache picked up the new columns
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
